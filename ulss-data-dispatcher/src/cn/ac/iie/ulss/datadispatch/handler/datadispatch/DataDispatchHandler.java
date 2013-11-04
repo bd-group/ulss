@@ -310,7 +310,7 @@ public class DataDispatchHandler extends AbstractHandler {
                     httpServletResponse.getWriter().println("-1\n" + errInfo);
                 } else {
                     dataDispatcher.dispatch(req);
-                    logger.info("sending " + docsSet.size() + " records of " + docSchemaName + " to metaq successfully");
+                    logger.info("req " + reqID + ":sending " + docsSet.size() + " records of " + docSchemaName + " to metaq successfully");
                     httpServletResponse.setStatus(HttpServletResponse.SC_OK);
                     httpServletResponse.getWriter().println("0\n" + bzSysSign + "\n" + reqID);
                 }
