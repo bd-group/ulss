@@ -77,7 +77,7 @@ public class SE2GBDBWorker extends SE2DBWorker {
             metaClientConfig.setZkConfig(zkConfig);
 
             final MessageSessionFactory sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
-            String consumerGroupName = "se2gbdw_" + tableSe2DBRule.getTableName() + "_" + tableSe2DBRule.getMqName() + "_test";
+            String consumerGroupName = "se2gbdw_" + tableSe2DBRule.getTableName() + "_" + tableSe2DBRule.getMqName() + "";
             ConsumerConfig cc = new ConsumerConfig();
             cc.setGroup(consumerGroupName);
             cc.setFetchTimeoutInMills(1000);
