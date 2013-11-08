@@ -17,8 +17,6 @@ import com.taobao.metamorphosis.client.consumer.MessageListener;
 import com.taobao.metamorphosis.utils.ZkUtils;
 import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
-import java.sql.Connection;
-import java.sql.DriverManager;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -120,102 +118,151 @@ public class SE2GBDBWorker extends SE2DBWorker {
         List<TableSe2DBRule.Column> tableColumnSet = tableSe2DBRule.getColumnSet();
         List<String> columnNameSet = null;
         int columnSize = tableColumnSet.size();
-        GBLoadClient gbClient = new GBLoadClient();
-        Statement stmt = null;
+        GBLoadClient gbClient = null;
         int record2CommitNum = 0;
 
         public GBMessageListener(List<String> pColumnNameSet) {
             columnNameSet = pColumnNameSet;
-            String[] connStrItems = tableSe2DBRule.getConnStr().split(":");
-            int rv = gbClient.connect(connStrItems[0], Integer.parseInt(connStrItems[1]), null, null);
-            if (rv != 0) {
-                logger.error("connect to " + tableSe2DBRule.getConnStr() + " unsuccessfully");
-            } else {
-                logger.info("connect to " + tableSe2DBRule.getConnStr() + " successfully");
-                stmt = gbClient.startLoad("logdb", tableSe2DBRule.getTableName(), columnNameSet, "");
+        }
+
+        private Statement getStatement() {
+            Statement stmt = null;
+            if (gbClient == null) {
+                synchronized (this) {
+                    if (gbClient == null) {
+                        try {
+                            String[] connStrItems = tableSe2DBRule.getConnStr().split(":");
+                            gbClient = new GBLoadClient();
+                            gbClient.connect(connStrItems[0], Integer.parseInt(connStrItems[1]), "", "");
+                        } catch (Exception ex) {
+                            logger.error("connect to gbase unsuccessfully for " + ex.getMessage(), ex);
+                            gbClient = null;
+                        }
+                    }
+                }
             }
+
+            if (gbClient != null) {
+                try {
+                    stmt = gbClient.startLoad("logdb", tableSe2DBRule.getTableName(), columnNameSet);
+                } catch (Exception ex) {
+                    logger.error("create session to gdbase unsuccessfully for " + ex.getMessage(), ex);
+                }
+            }
+
+            return stmt;
         }
 
         //fixme:add timeout
         public void recieveMessages(Message msg) {
             logger.info(Thread.currentThread().getId() + " receives message " + msg.getData().length + " at " + System.nanoTime());
+
+            //decode docs
             ByteArrayInputStream docsbis = new ByteArrayInputStream(msg.getData());//tuning
             BinaryDecoder docsbd = new DecoderFactory().binaryDecoder(docsbis, null);
-
-            GenericRecord docsRecord = new GenericData.Record(RuntimeEnv.docsSchema);
+            GenericArray docsset = null;
             try {
+                GenericRecord docsRecord = new GenericData.Record(RuntimeEnv.docsSchema);
                 RuntimeEnv.docsReader.read(docsRecord, docsbd);
-
-                GenericRecord docRecord = new GenericData.Record(docSchema);
-                GenericArray docsset = (GenericData.Array<GenericRecord>) docsRecord.get("doc_set");
+                docsset = (GenericData.Array<GenericRecord>) docsRecord.get("doc_set");
                 logger.info("docs size:" + docsset.size());
+                if (docsset.size() < 1) {
+                    logger.warn("doc set is empty");
+                    return;
+                }
+            } catch (Exception ex) {
+                logger.error("parse docs unsuccessfully for " + ex.getMessage(), ex);
+                docsset = null;
+                return;
+            } finally {
+                try {
+                    docsbis.close();
+                } catch (Exception ex) {
+                }
+            }
 
+            long startTime = -1;
+            long endTime = -1;
+            int validRecordNum = 0;
 
+            while (true) {
+                //get stmt
+                Statement stmt = getStatement();
+                while (true) {
+                    if (stmt == null) {
+                        logger.warn("stmt is null and try to constrauct it");
+                        stmt = getStatement();
+                    } else {
+                        logger.warn("construct handler successfully");
+                        break;
+                    }
+                }
+
+                //build rows
                 List<Row> rows = new ArrayList<Row>();
                 Iterator<ByteBuffer> itor = docsset.iterator();
-                long startTime = System.nanoTime();
+                startTime = System.nanoTime();
                 while (itor.hasNext()) {
+                    //read doc
                     ByteArrayInputStream docbis = new ByteArrayInputStream(((ByteBuffer) itor.next()).array());
                     BinaryDecoder docbd = new DecoderFactory().binaryDecoder(docbis, null);
-
+                    GenericRecord docRecord = new GenericData.Record(docSchema);
                     try {
                         docReader.read(docRecord, docbd);
                     } catch (Exception ex) {
                         logger.warn("parse doc unsuccessfully for " + ex.getMessage() + " and skip it");
                         continue;
                     }
-                    Row row = new Row();
-                    row.beginRow();
-                    for (int i = 0; i < columnSize; i++) {
-                        Object value = docRecord.get(tableColumnSet.get(i).getColumnName());
-                        if (value == null || value.toString().isEmpty()) {
-                            row.appendNull();
-                        } else {
-                            row.appendValue(value.toString());
-                        }
-                    }
-                    row.endRow();
-                    rows.add(row);
-                }
-                long endTime = System.nanoTime();
 
-                logger.info("build rows use " + (endTime - startTime) / (1024 * 1024));
-
-
-                startTime = System.nanoTime();
-                for (int tryTime = 0; tryTime < 10; tryTime++) {
-                    logger.info("try " + tryTime + "st time...");
-
-                    if (stmt == null) {
-                        continue;
-                    }
-
-                    int rv = stmt.addRows(rows);
-                    //fixme
-                    if (rv != 0) {
-                        gbClient.rollback();
-                        logger.error("write " + rows.size() + " rows to table " + tableSe2DBRule.getTableName() + " unsuccessfully ");
-                        continue;
-                    } else {
-                        logger.info("write " + rows.size() + " rows to table " + tableSe2DBRule.getTableName() + " successfully");
-                        synchronized (this) {
-                            record2CommitNum += rows.size();
-                            if (record2CommitNum >= 10000) {
-                                rv = gbClient.commit();
-                                if (rv == 0) {
-                                    logger.info("commit " + record2CommitNum + " rows to table " + tableSe2DBRule.getTableName() + " successfully");
-                                    record2CommitNum = 0;
-                                } else {
-                                    //fixme
-                                }
+                    //build row
+                    Row row = new Row(stmt);
+                    try {
+                        row.beginRow();
+                        for (int i = 0; i < columnSize; i++) {
+                            Object value = docRecord.get(tableColumnSet.get(i).getColumnName());
+                            if (value == null || value.toString().isEmpty()) {
+                                row.appendNull();
+                            } else {
+                                row.appendValue(value.toString());
                             }
                         }
-                        break;
+                        row.endRow();
+                        rows.add(row);
+                        validRecordNum++;
+                    } catch (Exception ex) {
+                        logger.warn("set record value unsuccessfully for " + ex.getMessage() + " and skip it", ex);
+                        continue;
                     }
                 }
                 endTime = System.nanoTime();
-            } catch (Exception ex) {
-                logger.warn("parse docs unsuccessfully for " + ex.getMessage(), ex);
+                logger.info("build rows use " + (endTime - startTime) / (1024 * 1024) + "us with " + validRecordNum + " valid records");
+
+                //insert into dw
+                if (validRecordNum > 0) {
+                    try {
+                        stmt.addRows(rows);
+                        startTime = System.nanoTime();
+                        stmt.commit();
+                        endTime = System.nanoTime();
+                        logger.info("write " + validRecordNum + " records to table " + tableSe2DBRule.getTableName() + " successfully using " + (endTime - startTime) / (1024 * 1024) + " us");
+                        break;
+                    } catch (Exception ex) {
+                        logger.error("write " + validRecordNum + " records to table " + tableSe2DBRule.getTableName() + " unsuccessfully ");
+                        try {
+                            stmt.rollback();
+                        } catch (Exception ex1) {
+                        }
+                    } finally {
+                        try {
+                            stmt.release();
+                        } catch (Exception ex1) {
+                        }
+                        stmt = null;
+                    }
+                } else {
+                    logger.warn("no records to commit");
+                    break;
+                }
             }
         }
 

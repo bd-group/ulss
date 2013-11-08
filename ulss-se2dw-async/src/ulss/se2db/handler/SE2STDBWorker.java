@@ -132,19 +132,20 @@ public class SE2STDBWorker extends SE2DBWorker {
                         } catch (Exception ex) {
                             logger.warn("create connection to st dw unsuccessfully for " + ex.getMessage(), ex);
                             conn = null;
-                            handler = null;
                         }
                     }
                 }
             }
-            
-            try {
-                //创建大容量数据导入对象
-                handler = (OscarImportDistribute) ((Jdbc3gConnection) conn).createDistributeImportHandler(tableSe2DBRule.getTableName(), ImportMode.SINGLE);
-                handler.setBufferSize(30);
-            } catch (Exception ex) {
-                logger.warn("create handler to st dw unsuccessfully for " + ex.getMessage(), ex);
-                handler = null;
+
+            if (conn != null) {
+                try {
+                    //创建大容量数据导入对象
+                    handler = (OscarImportDistribute) ((Jdbc3gConnection) conn).createDistributeImportHandler(tableSe2DBRule.getTableName(), ImportMode.SINGLE);
+                    handler.setBufferSize(30);
+                } catch (Exception ex) {
+                    logger.warn("create handler to st dw unsuccessfully for " + ex.getMessage(), ex);
+                    handler = null;
+                }
             }
 
             return handler;
@@ -178,79 +179,87 @@ public class SE2STDBWorker extends SE2DBWorker {
                 }
             }
 
-            //get handler
-            OscarImportDistribute handler = getHandler();
+
+
+
+            long startTime = -1;
+            long endTime = -1;
+            int validRecordNum = 0;
+
             while (true) {
-                if (handler == null) {
-                    logger.warn("handler is null and try to constrauct it");
-                    handler = getHandler();
+                //get handler
+                OscarImportDistribute handler = getHandler();
+                while (true) {
+                    if (handler == null) {
+                        logger.warn("handler is null and try to constrauct it");
+                        handler = getHandler();
+                    } else {
+                        logger.warn("construct handler successfully");
+                        break;
+                    }
+                }
+
+                //set handler
+                Iterator<ByteBuffer> itor = docsset.iterator();
+                startTime = System.nanoTime();
+                while (itor.hasNext()) {
+                    //read doc
+                    ByteArrayInputStream docbis = new ByteArrayInputStream(((ByteBuffer) itor.next()).array());
+                    BinaryDecoder docbd = new DecoderFactory().binaryDecoder(docbis, null);
+                    GenericRecord docRecord = new GenericData.Record(docSchema);
+                    try {
+                        docReader.read(docRecord, docbd);
+                    } catch (Exception ex) {
+                        logger.warn("parse doc unsuccessfully for " + ex.getMessage() + " and skip it");
+                        continue;
+                    }
+
+                    //set record value
+                    try {
+                        for (int i = 0; i < columnSize; i++) {
+                            Object value = docRecord.get(tableColumnSet.get(i).getColumnName());
+                            if (value == null || value.toString().isEmpty()) {
+                                handler.setObject(tableColumnSet.get(i).getColumnIdx(), "\\N");
+                            } else {
+                                handler.setObject(tableColumnSet.get(i).getColumnIdx(), value);
+                            }
+                        }
+                        handler.endRow();
+                        validRecordNum++;
+                    } catch (Exception ex) {
+                        logger.warn("set record value unsuccessfully for " + ex.getMessage() + " and skip it", ex);
+                        continue;
+                    }
+                }
+                endTime = System.nanoTime();
+                logger.info("build handler use " + (endTime - startTime) / (1024 * 1024) + "us with " + validRecordNum + " valid records");
+
+
+                //insert into dw
+                if (validRecordNum > 0) {
+                    try {
+                        startTime = System.nanoTime();
+                        handler.execute();
+                        endTime = System.nanoTime();
+                        logger.info("write " + validRecordNum + " records to table " + tableSe2DBRule.getTableName() + " successfully using " + (endTime - startTime) / (1024 * 1024) + " us");
+                        break;
+                    } catch (Exception ex) {
+                        logger.error("write " + validRecordNum + " records to table " + tableSe2DBRule.getTableName() + " unsuccessfully ");
+                        try {
+                            handler.rollback();
+                        } catch (Exception ex1) {
+                        }
+                    } finally {
+                        try {
+                            handler.close();
+                        } catch (Exception ex) {
+                        }
+                        handler = null;
+                    }
                 } else {
-                    logger.warn("construct handler successfully");
+                    logger.warn("no records to commit");
                     break;
                 }
-            }
-
-            //set handler
-            int validRecordNum = 0;
-            Iterator<ByteBuffer> itor = docsset.iterator();
-            long startTime = System.nanoTime();
-            while (itor.hasNext()) {
-                //read doc
-                ByteArrayInputStream docbis = new ByteArrayInputStream(((ByteBuffer) itor.next()).array());
-                BinaryDecoder docbd = new DecoderFactory().binaryDecoder(docbis, null);
-                GenericRecord docRecord = new GenericData.Record(docSchema);
-                try {
-                    docReader.read(docRecord, docbd);
-                } catch (Exception ex) {
-                    logger.warn("parse doc unsuccessfully for " + ex.getMessage() + " and skip it");
-                    continue;
-                }
-
-                //set record value
-                try {
-                    for (int i = 0; i < columnSize; i++) {
-                        Object value = docRecord.get(tableColumnSet.get(i).getColumnName());
-                        if (value == null || value.toString().isEmpty()) {
-                            handler.setString(tableColumnSet.get(i).getColumnIdx(), "\\N");
-                        } else {
-                            handler.setString(tableColumnSet.get(i).getColumnIdx(), value.toString());
-                        }
-                    }
-                    handler.endRow();
-                    validRecordNum++;
-                } catch (Exception ex) {
-                    logger.warn("set record value unsuccessfully for " + ex.getMessage() + " and skip it", ex);
-                    continue;
-                }
-            }
-            long endTime = System.nanoTime();
-            logger.info("build handler use " + (endTime - startTime) / (1024 * 1024) + "us with " + validRecordNum + " valid records");
-
-
-            //insert into dw
-            if (validRecordNum > 0) {
-                try {
-                    startTime = System.nanoTime();
-                    handler.execute();
-                    endTime = System.nanoTime();
-                    logger.info("write " + validRecordNum + " records to table " + tableSe2DBRule.getTableName() + " successfully using " + (endTime - startTime) / (1024 * 1024) + " us");
-                } catch (Exception ex) {
-                    logger.error("write " + validRecordNum + " records to table " + tableSe2DBRule.getTableName() + " unsuccessfully ");
-                    try {
-                        handler.rollback();
-                    } catch (Exception ex1) {
-                    }
-                    //fixme:write data to file
-                    
-                } finally {
-                    try {
-                        handler.close();
-                    } catch (Exception ex) {
-                    }
-                    handler = null;
-                }
-            } else {
-                logger.warn("no records to commit");
             }
         }
 
