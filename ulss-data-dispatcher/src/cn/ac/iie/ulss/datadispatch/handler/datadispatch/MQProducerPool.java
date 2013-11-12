@@ -89,7 +89,7 @@ public class MQProducerPool {
                 throw new Exception("Send message failed,error message:" + sendResult.getErrorMessage());
             } else {
 //                System.out.println(endTime);
-                logger.debug("send message ok:" + (endTime - startTime) / (1000 * 1000));
+                logger.debug("send message to " + sendResult.getPartition() + ":" + sendResult.getOffset() + " ok:" + (endTime - startTime) / (1000 * 1000));
             }
 
         } catch (Exception ex) {
