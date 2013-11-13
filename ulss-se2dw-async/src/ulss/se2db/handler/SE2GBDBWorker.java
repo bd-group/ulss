@@ -5,6 +5,7 @@
 package ulss.se2db.handler;
 
 import cn.gbase.gb8a.gbloadapi.GBLoadClient;
+import cn.gbase.gb8a.gbloadapi.GBLoadException;
 import cn.gbase.gb8a.gbloadapi.Row;
 import cn.gbase.gb8a.gbloadapi.Statement;
 import com.taobao.metamorphosis.Message;
@@ -16,6 +17,7 @@ import com.taobao.metamorphosis.client.consumer.MessageConsumer;
 import com.taobao.metamorphosis.client.consumer.MessageListener;
 import com.taobao.metamorphosis.utils.ZkUtils;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -23,6 +25,7 @@ import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.logging.Level;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
@@ -78,7 +81,7 @@ public class SE2GBDBWorker extends SE2DBWorker {
             String consumerGroupName = "se2gbdw_" + tableSe2DBRule.getTableName() + "_" + tableSe2DBRule.getMqName() + "";
             ConsumerConfig cc = new ConsumerConfig();
             cc.setGroup(consumerGroupName);
-            cc.setFetchTimeoutInMills(1000);
+            cc.setFetchTimeoutInMills(100000);
             cc.setMaxDelayFetchTimeInMills(500);
             cc.setFetchRunnerCount(4);
             cc.setCommitOffsetPeriodInMills(100);
@@ -133,7 +136,11 @@ public class SE2GBDBWorker extends SE2DBWorker {
                         try {
                             String[] connStrItems = tableSe2DBRule.getConnStr().split(":");
                             gbClient = new GBLoadClient();
-                            gbClient.connect(connStrItems[0], Integer.parseInt(connStrItems[1]), "", "");
+                            int tmprv = gbClient.connect(connStrItems[0], Integer.parseInt(connStrItems[1]), "", "");
+                            if (tmprv != 0) {
+                                gbClient.disconnect();
+                                gbClient = null;
+                            }
                         } catch (Exception ex) {
                             logger.error("connect to gbase unsuccessfully for " + ex.getMessage(), ex);
                             gbClient = null;
@@ -146,6 +153,14 @@ public class SE2GBDBWorker extends SE2DBWorker {
                 try {
                     stmt = gbClient.startLoad("logdb", tableSe2DBRule.getTableName(), columnNameSet);
                 } catch (Exception ex) {
+                    synchronized (this) {
+                        try {
+                            gbClient.disconnect();
+                        } catch (Exception ex1) {
+                            logger.error(ex1.getMessage());
+                        }
+                        gbClient = null;
+                    }
                     logger.error("create session to gdbase unsuccessfully for " + ex.getMessage(), ex);
                 }
             }
@@ -268,8 +283,8 @@ public class SE2GBDBWorker extends SE2DBWorker {
 
         public Executor getExecutor() {
             // Thread pool to process messages,maybe null.
-            ExecutorService threadPool = Executors.newFixedThreadPool(100);
-            return threadPool;
+//            ExecutorService threadPool = Executors.newFixedThreadPool(100);
+            return null;
         }
     }
 }

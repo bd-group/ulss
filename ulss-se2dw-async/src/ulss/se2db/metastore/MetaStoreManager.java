@@ -99,7 +99,7 @@ public class MetaStoreManager {
 
             ResultSet rs = null;
             try {
-                rs = DaoPool.getDao(METASTORE_DB_NAME).executeQuery("select rule_name,rule_content from data_dispose_rules where rule_type=5");
+                rs = DaoPool.getDao(METASTORE_DB_NAME).executeQuery("select rule_name,rule_content from data_dispose_rules where rule_type=3");
                 while (rs.next()) {
                     String ruleName = rs.getString("rule_name").trim();
                     String ruleContent = rs.getString("rule_content").trim();
