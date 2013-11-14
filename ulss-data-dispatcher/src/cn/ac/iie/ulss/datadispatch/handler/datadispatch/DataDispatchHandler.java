@@ -63,7 +63,7 @@ public class DataDispatchHandler extends AbstractHandler {
             logger.info("get data schema and corresponding message queue from metadb...");
             while (true) {
                 try {
-                    rs = DaoPool.getDao(RuntimeEnv.METADB_CLUSTER).executeQuery("select dataschema.schema_name,dataschema.schema_content,dataschema_mq.mq from dataschema left outer join dataschema_mq on dataschema.schema_name=dataschema_mq.schema_name");
+                    rs = DaoPool.getDao(RuntimeEnv.METADB_CLUSTER).executeQuery("select dataschema.schema_name,dataschema.schema_content,dataschema_mq.mq,dataschema_mq.region from dataschema left outer join dataschema_mq on dataschema.schema_name=dataschema_mq.schema_name");
                     break;
                 } catch (Exception ex) {
                     logger.warn("get information from metadb unsuccessfully for " + ex.getMessage(), ex);
@@ -79,6 +79,8 @@ public class DataDispatchHandler extends AbstractHandler {
                 String schemaName = rs.getString("schema_name").toLowerCase();
                 String schemaContent = rs.getString("schema_content").toLowerCase();
                 String mq = rs.getString("mq");
+                String region = rs.getString("region");
+                region = region == null ? "" : region;
                 logger.info("schema " + schemaName + " found");
                 logger.info("schema " + schemaName + "'s content is:\n" + schemaContent);
                 if (schemaName.equals("docs")) {
@@ -89,14 +91,16 @@ public class DataDispatchHandler extends AbstractHandler {
                     docsReader = new GenericDatumReader<GenericRecord>(docsSchema);
                     logger.info("parse schema docs successfully");
                 } else {
-                    logger.info("constructing data dispatcher for schema " + schemaName + "...");
+                    String schemaFullName = schemaName + (region.isEmpty() ? "" : "@" + region);
+                    logger.info("constructing data dispatcher for schema " + schemaFullName + "...");
+
                     DataDispatcher dataDispatcher = DataDispatcher.getDataDispatcher(schemaName, schemaContent, mq);
                     if (dataDispatcher != null) {
-                        dataDispatchHandler.docSchema2Dispatcher.put(schemaName, dataDispatcher);
-                        logger.info("construct data dispatcher for schema " + schemaName + " successfully");
+                        dataDispatchHandler.docSchema2Dispatcher.put(schemaFullName, dataDispatcher);
+                        logger.info("construct data dispatcher for schema " + schemaFullName + " successfully");
                     } else {
                         dataDispatchHandler = null;
-                        logger.info("constructing data dispatcher for schema " + schemaName + " is failed");
+                        logger.info("constructing data dispatcher for schema " + schemaFullName + " is failed");
                         break;
                     }
                 }
@@ -203,10 +207,17 @@ public class DataDispatchHandler extends AbstractHandler {
             }
         }
 
-        //check format of docs 
+        //check format of docs         
         String docSchemaName = null;
         try {
             docSchemaName = docsRecord.get("doc_schema_name").toString();
+            if (docSchemaName == null || docSchemaName.isEmpty()) {
+                String errInfo = "req " + reqID + ":docSchemaName is empty";
+                logger.error(errInfo);
+                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                httpServletResponse.getWriter().println("-1\n" + errInfo);
+                return;
+            }
         } catch (Exception ex) {
             String errInfo = "req " + reqID + ":wrong format of bussiness data,can't get docSchemaName";
             logger.error(errInfo, ex);
@@ -214,17 +225,18 @@ public class DataDispatchHandler extends AbstractHandler {
             httpServletResponse.getWriter().println("-1\n" + errInfo);
             return;
         }
+        String region = getRegion(baseRequest);
+        String docSchemaFullName = docSchemaName + (region.isEmpty() ? "" : "@" + region);
+        logger.debug("req " + reqID + ":doc shcema full name is " + docSchemaFullName);
 
-        logger.debug("req " + reqID + ":doc shcema name is " + docSchemaName);
-
-        DataDispatcher dataDispatcher = docSchema2Dispatcher.get(docSchemaName);
+        DataDispatcher dataDispatcher = docSchema2Dispatcher.get(docSchemaFullName);
         if (dataDispatcher == null) {
             synchronized (docSchema2Dispatcher) {
-                dataDispatcher = docSchema2Dispatcher.get(docSchemaName);
+                dataDispatcher = docSchema2Dispatcher.get(docSchemaFullName);
                 if (dataDispatcher == null) {
                     ResultSet rs = null;
                     try {
-                        String sql = "select dataschema.schema_name,dataschema.schema_content,dataschema_mq.mq from dataschema inner join dataschema_mq on dataschema.schema_name=dataschema_mq.schema_name and dataschema.schema_name='" + docSchemaName + "'";
+                        String sql = "select dataschema.schema_name,dataschema.schema_content,dataschema_mq.mq,,dataschema_mq.region from dataschema inner join dataschema_mq on dataschema.schema_name=dataschema_mq.schema_name and dataschema.schema_name='" + docSchemaName + (region.isEmpty() ? "" : "' and dataschema_mq.region='" + region + "'");
                         logger.debug("req " + reqID + ":" + sql);
                         for (int tryTimes = 0; tryTimes < 10; tryTimes++) {
                             try {
@@ -254,10 +266,10 @@ public class DataDispatchHandler extends AbstractHandler {
                             String mq = rs.getString("mq");
                             dataDispatcher = DataDispatcher.getDataDispatcher(schemaName, schemaContent, mq);
                             if (dataDispatcher != null) {
-                                dataDispatchHandler.docSchema2Dispatcher.put(schemaName, dataDispatcher);
-                                logger.info("req " + reqID + ":constructing data dispatcher for schema " + schemaName + " is finished successfully");
+                                dataDispatchHandler.docSchema2Dispatcher.put(docSchemaFullName, dataDispatcher);
+                                logger.info("req " + reqID + ":constructing data dispatcher for schema " + docSchemaFullName + " is finished successfully");
                             } else {
-                                String warningInfo = "req " + reqID + ":internal error for constructing data dispatcher for schema " + schemaName + " is failed";
+                                String warningInfo = "req " + reqID + ":internal error for constructing data dispatcher for schema " + docSchemaFullName + " is failed";
                                 logger.warn(warningInfo);
                                 httpServletResponse.setStatus(HttpServletResponse.SC_OK);
                                 httpServletResponse.getWriter().println("-1\n" + warningInfo);
@@ -321,5 +333,10 @@ public class DataDispatchHandler extends AbstractHandler {
             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
             httpServletResponse.getWriter().println("-1\n" + errInfo);
         }
+    }
+
+    private String getRegion(Request req) {
+        Object val = req.getAttribute("sd");
+        return val == null ? "" : ((String) val).toLowerCase();
     }
 }
