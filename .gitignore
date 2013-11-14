@@ -2,7 +2,7 @@
 /ulss-data-dispatcher/*
 !/ulss-data-dispatcher/src
 !/ulss-data-dispatcher/lib
-!/ulss-data-dispatcher/data-dispatch.properties
+!/ulss-data-dispatcher/ulss-data-dispatcher.properties
 !/ulss-data-dispatcher/log4j.properties
 #ulss-dxload4yn
 /ulss-dxload4yn/*
