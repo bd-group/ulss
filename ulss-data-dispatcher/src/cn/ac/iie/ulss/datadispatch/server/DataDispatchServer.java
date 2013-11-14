@@ -58,7 +58,7 @@ public class DataDispatchServer {
     }
 
     private static void init() throws Exception {
-        String configurationFileName = "data-dispatch.properties";
+        String configurationFileName = "ulss-data-dispatcher.properties";
         logger.info("initializing data dispatch server...");
         logger.info("getting configuration from configuration file " + configurationFileName);
         Configuration conf = Configuration.getConfiguration(configurationFileName);
