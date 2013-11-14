@@ -45,14 +45,13 @@ public class DataDispatcher {
         }
     }
 
-    public void dispatch(byte[] pData) throws Exception{
+    public void dispatch(byte[] pData) throws Exception {
         mqProducerPool.sendMessage(pData);
     }
 
     public String getDocSchemaContent() {
         return docSchemaContent;
     }
-    
 }
 //        GenericArray docsSet = (GenericData.Array<GenericRecord>) docsRecord.get("doc_set");
 //        System.out.println(Thread.currentThread().getId() + ":" + docsSet.size());
