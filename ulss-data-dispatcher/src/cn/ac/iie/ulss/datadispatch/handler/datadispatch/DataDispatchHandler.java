@@ -207,6 +207,13 @@ public class DataDispatchHandler extends AbstractHandler {
         String docSchemaName = null;
         try {
             docSchemaName = docsRecord.get("doc_schema_name").toString();
+            if (docSchemaName == null || docSchemaName.isEmpty()) {
+                String errInfo = "req " + reqID + ":docSchemaName is empty";
+                logger.error(errInfo);
+                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                httpServletResponse.getWriter().println("-1\n" + errInfo);
+                return;
+            }
         } catch (Exception ex) {
             String errInfo = "req " + reqID + ":wrong format of bussiness data,can't get docSchemaName";
             logger.error(errInfo, ex);
