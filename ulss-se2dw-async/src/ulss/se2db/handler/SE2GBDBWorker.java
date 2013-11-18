@@ -5,7 +5,6 @@
 package ulss.se2db.handler;
 
 import cn.gbase.gb8a.gbloadapi.GBLoadClient;
-import cn.gbase.gb8a.gbloadapi.GBLoadException;
 import cn.gbase.gb8a.gbloadapi.Row;
 import cn.gbase.gb8a.gbloadapi.Statement;
 import com.taobao.metamorphosis.Message;
@@ -17,15 +16,11 @@ import com.taobao.metamorphosis.client.consumer.MessageConsumer;
 import com.taobao.metamorphosis.client.consumer.MessageListener;
 import com.taobao.metamorphosis.utils.ZkUtils;
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.logging.Level;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
