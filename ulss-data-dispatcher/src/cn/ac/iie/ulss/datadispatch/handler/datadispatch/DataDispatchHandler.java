@@ -336,7 +336,7 @@ public class DataDispatchHandler extends AbstractHandler {
     }
 
     private String getRegion(Request req) {
-        Object val = req.getAttribute("sd");
+        Object val = req.getParameter("region");
         return val == null ? "" : ((String) val).toLowerCase();
     }
 }
