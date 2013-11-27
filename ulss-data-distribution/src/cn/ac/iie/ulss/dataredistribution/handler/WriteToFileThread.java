@@ -10,6 +10,8 @@ import com.taobao.metamorphosis.Message;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -41,6 +43,7 @@ public class WriteToFileThread implements Runnable {
     static org.apache.log4j.Logger logger = null;
     int acceptTimeout = 30000;
     String dataDir = (String) RuntimeEnv.getParam(RuntimeEnv.DATA_DIR);
+    SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmss");
 
     {
         PropertyConfigurator.configure("log4j.properties");
@@ -65,7 +68,7 @@ public class WriteToFileThread implements Runnable {
         docsSchemaContent = (String) RuntimeEnv.getParam(GlobalVariables.DOCS_SCHEMA_CONTENT);
         Protocol protocol = null;
         protocol = Protocol.parse(docsSchemaContent);
-        Schema docsschema = protocol.getType(GlobalVariables.DOCS_SCHEMA_CONTENT);
+        Schema docsschema = protocol.getType(GlobalVariables.DOCS);
         DatumWriter<GenericRecord> write = new GenericDatumWriter<GenericRecord>(docsschema);
         DataFileWriter<GenericRecord> dataFileWriter = new DataFileWriter<GenericRecord>(write);
         DatumReader<GenericRecord> dxreader = new GenericDatumReader<GenericRecord>(docsschema);
@@ -74,14 +77,16 @@ public class WriteToFileThread implements Runnable {
             synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_DIR)) {
                 if (!out.exists() && !out.isDirectory()) {
                     out.mkdirs();
-                    logger.info("create the directory " + dataDir +"backup");
+                    logger.info("create the directory " + dataDir + "backup");
                 }
             }
 
             if (dataPool.isEmpty() && sendThreadPool.activeCount() <= activeThreadCount) {
 
                 String f = fsmit.getName();
-                String fb = System.currentTimeMillis() + "_"+ f + ".old";
+                Date d = new Date();
+                String fb = format.format(d) + "_" + f + ".old";
+                
                 if (fsmit.exists()) {
                     logger.info("rename the file " + fsmit.getName());
                     fsmit.renameTo(new File(dataDir + "backup/" + fb));
@@ -92,7 +97,7 @@ public class WriteToFileThread implements Runnable {
                     logger.info("create the file " + fsmit.getName());
                     try {
                         dataFileWriter.create(docsschema, fsmit);
-                    } catch (IOException ex) {
+                    } catch (Exception ex) {
                         logger.error("can not create the file " + fsmit.getName() + ex, ex);
                         return;
                     }

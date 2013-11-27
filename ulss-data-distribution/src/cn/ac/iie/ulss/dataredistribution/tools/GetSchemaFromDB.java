@@ -5,7 +5,7 @@
 package cn.ac.iie.ulss.dataredistribution.tools;
 
 import cn.ac.iie.ulss.dataredistribution.commons.GlobalVariables;
-import cn.ac.iie.ulss.dataredistribution.handler.GetRuleFromDBThread;
+import cn.ac.iie.ulss.dataredistribution.handler.GetRuleFromDB;
 import cn.ac.iie.ulss.dataredistribution.commons.RuntimeEnv;
 import cn.ac.iie.ulss.dataredistribution.dao.SimpleDaoImpl;
 import java.util.List;
@@ -24,7 +24,7 @@ public class GetSchemaFromDB {
 
     static {
         PropertyConfigurator.configure("log4j.properties");
-        logger = Logger.getLogger(GetRuleFromDBThread.class.getName());
+        logger = Logger.getLogger(GetRuleFromDB.class.getName());
     }
 
     /**
@@ -37,7 +37,7 @@ public class GetSchemaFromDB {
 
         String dbCluster = (String) RuntimeEnv.getParam(RuntimeEnv.DB_CLUSTER);
         simpleDao = SimpleDaoImpl.getDaoInstance(dbCluster);
-        logger.info("getting schema from oracle...");
+        logger.info("getting schema from oracledb...");
         String sql = "select DATASCHEMA_MQ.MQ,DATASCHEMA.SCHEMA_CONTENT from DATASCHEMA_MQ,DATASCHEMA WHERE DATASCHEMA_MQ.SCHEMA_NAME=DATASCHEMA.SCHEMA_NAME";
         List<List<String>> rs = simpleDao.queryForList(sql);
         for (List<String> r1 : rs) {
@@ -56,6 +56,6 @@ public class GetSchemaFromDB {
             topicToSchemaName.put(r3.get(0), r3.get(1));
         }
 
-        logger.info("get schema from metadb successfully");
+        logger.info("get schema from oracledb successfully");
     }
 }

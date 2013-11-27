@@ -8,6 +8,7 @@ import cn.ac.iie.ulss.dataredistribution.commons.GlobalVariables;
 import cn.ac.iie.ulss.dataredistribution.commons.RuntimeEnv;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
 import cn.ac.iie.ulss.dataredistribution.tools.MessageTransferStation;
+import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -19,16 +20,17 @@ import org.apache.log4j.PropertyConfigurator;
  * @author evan
  */
 class RemoveNodeFromMessageTransferStation implements Runnable {
-
+    Rule r = null;
     ArrayList<RNode> nurl = null;
     static org.apache.log4j.Logger logger = null;
 
     static {
         PropertyConfigurator.configure("log4j.properties");
-        logger = org.apache.log4j.Logger.getLogger(GetRuleFromDBThread.class.getName());
+        logger = org.apache.log4j.Logger.getLogger(GetRuleFromDB.class.getName());
     }
 
-    public RemoveNodeFromMessageTransferStation(ArrayList<RNode> nurl) {
+    public RemoveNodeFromMessageTransferStation(Rule r , ArrayList<RNode> nurl) {
+        this.r = r;
         this.nurl = nurl;
     }
 
@@ -43,7 +45,7 @@ class RemoveNodeFromMessageTransferStation implements Runnable {
                     synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
                         messageTransferStation.remove(n);
                     }
-                    logger.info("messageTransmitStation remove the node " + n.getName());
+                    logger.info("messageTransmitStation remove the node " + n.getName() + " for the " + r.getTopic() + " " + r.getServiceName());
                     break;
                 } else {
                     try {

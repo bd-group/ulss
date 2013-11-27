@@ -53,6 +53,7 @@ import org.apache.log4j.PropertyConfigurator;
  */
 public class DataSenderThread implements Runnable {
 
+    Long version = 0L;
     ArrayBlockingQueue sendQueue = null;
     Integer sendPoolSize = 5000;
     String topic = null;
@@ -63,8 +64,9 @@ public class DataSenderThread implements Runnable {
     String serviceName = null;
     String keyinterval = null;
     ThreadGroup sendThreadPool = null;
+    ConcurrentHashMap<String, Object[]> valueToFile = null;
     static org.apache.log4j.Logger logger = null;
-    int sendThreadPoolSize = 100;
+    int sendThreadPoolSize = 10;
     Rule rule = null;
     int attempSize = 2;
     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -80,7 +82,7 @@ public class DataSenderThread implements Runnable {
         logger = org.apache.log4j.Logger.getLogger(DataSenderThread.class.getName());
     }
 
-    public DataSenderThread(ArrayBlockingQueue abq, Integer sendPoolSize, RNode node, String topic, String serviceName, ThreadGroup sendThreadPool, Rule rule, String keyinterval) {
+    public DataSenderThread(ArrayBlockingQueue abq, Integer sendPoolSize, RNode node, String topic, String serviceName, ThreadGroup sendThreadPool, Rule rule, String keyinterval, Long version) {
         sendQueue = abq;
         this.sendPoolSize = sendPoolSize;
         this.node = node;
@@ -89,6 +91,7 @@ public class DataSenderThread implements Runnable {
         this.sendThreadPool = sendThreadPool;
         this.rule = rule;
         this.keyinterval = keyinterval;
+        this.version = version;
     }
 
     @Override
@@ -97,441 +100,14 @@ public class DataSenderThread implements Runnable {
         docsSchemaContent = (String) RuntimeEnv.getParam(GlobalVariables.DOCS_SCHEMA_CONTENT);
         msgSchemaName = ((Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SCHEMANAME)).get(topic);
         sendThreadPoolSize = (Integer) RuntimeEnv.getParam(RuntimeEnv.SEND_THREAD_POOL_SIZE);
-        ConcurrentHashMap<String, Object[]> valueToFile = (ConcurrentHashMap<String, Object[]>) RuntimeEnv.getParam(GlobalVariables.VALUE_TO_FILE);
+        valueToFile = (ConcurrentHashMap<String, Object[]>) RuntimeEnv.getParam(GlobalVariables.VALUE_TO_FILE);
         String sendIP = "";
         Long f_id = 0L;
         String road = "";
 
         if (rule.getType() == 4) {
-            while (true) {
-                if (HANDLER_CLIENT_SIZE.longValue() < HANDLER_CLIENT_SIZE_MAX) {
-                    HANDLER_CLIENT_SIZE.addAndGet(1L);
-                    Object[] ob = new Object[3];
-
-                    String[] keytime = keyinterval.split("\\|");
-
-                    Long stime = 0L;
-                    Long etime = 0L;
-
-                    try {
-                        Date ds = dateFormat.parse(keytime[0]);
-                        Date de = dateFormat.parse(keytime[1]);
-                        stime = ds.getTime() / 1000;
-                        etime = de.getTime() / 1000;
-                    } catch (ParseException ex) {
-                        logger.info(ex, ex);
-                    } catch (Exception ex) {
-                        logger.error(ex, ex);
-                    }
-
-                    List<SplitValue> list = new ArrayList<SplitValue>();
-                    for (int j = 1; j <= 2; j++) { //设置一级和二级划分值
-                        if (j == 1) {
-                            SplitValue sv1 = new SplitValue();
-                            sv1.setLevel(j);//如果是interval分区，设置两个特征值，一个是上限一个是下限
-                            sv1.setValue("" + stime);
-                            sv1.setSplitKeyName(rule.getKeywords().split("\\|")[0]);
-                            list.add(sv1);
-
-                            SplitValue sv2 = new SplitValue();
-                            sv2.setLevel(j);//如果是interval分区，设置两个特征值，一个是上限一个是下限
-                            sv2.setValue("" + etime);
-                            sv2.setSplitKeyName(rule.getKeywords().split("\\|")[0]);
-                            list.add(sv2);
-                        } else if (j == 2) {
-                            SplitValue sv = new SplitValue();
-
-                            sv.setLevel(j);
-                            sv.setValue(rule.getNodeUrls().size() + "-" + node.getName());//设置哈希键值
-                            sv.setSplitKeyName(rule.getKeywords().split("\\|")[1]);
-                            list.add(sv);
-                        }
-                    }
-
-                    ob = getUsefulFileFromMetaDB(topic, list);
-
-                    sendIP = (String) ob[0];
-                    f_id = (Long) ob[1];
-                    road = (String) ob[2];
-
-                    if (sendIP == null || f_id == 0L || road == null || sendIP.equals("") || road.equals("") || sendIP == "" || road == "") {
-                        sendIP = "";
-                        f_id = 0L;
-                        road = "";
-                        ob[0] = "";
-                        ob[1] = 0L;
-                        ob[2] = "";
-                        logger.info("need to get zk for " + topic + " " + keyinterval + " " + node.getName());
-                        String zkCluster = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
-
-                        int zkSessionTimeout = 30000;
-                        ZkClient zk = new ZkClient(zkCluster, zkSessionTimeout);
-                        int ZKretryInterval = ZOOKEEPER_RETRY_INIT;
-                        int ZKretryAttempt = 0;
-
-                        while (true) {
-                            if (!zk.exists("/ulss")) {
-                                logger.debug("existsss " + zk.exists("/ulss"));
-                                try {
-                                    zk.createPersistent("/ulss");
-                                    logger.debug("/ulss created");
-                                } catch (Exception e) {
-                                    logger.debug("root exists : other master has created the /ulss");
-                                }
-                            }
-
-                            if (!zk.exists("/ulss/redistribution")) {
-                                logger.debug("existsss " + zk.exists("/ulss/redistribution"));
-                                try {
-                                    zk.createPersistent("/ulss/redistribution");
-                                    logger.debug("/ulss/redistribution created");
-                                } catch (Exception e) {
-                                    logger.debug("root exists : other master has created the /ulss/redistribution");
-                                }
-                            }
-
-                            if (!zk.exists("/ulss/redistribution/lock")) {
-
-                                try {
-                                    zk.createEphemeral("/ulss/redistribution/" + topic + keyinterval + "lock", keyinterval);
-                                    logger.debug("new lock " + keyinterval + " created");
-                                } catch (Exception e) {
-                                    logger.debug("the lock has been created");
-                                    try {
-                                        Thread.sleep(2000);
-                                    } catch (Exception ex) {
-                                        logger.info(ex, ex);
-                                    }
-                                    continue;
-                                }
-
-                                ob = getFileFromMetaDB(topic, list);
-                                sendIP = (String) ob[0];
-                                f_id = (Long) ob[1];
-                                road = (String) ob[2];
-
-                                if (sendIP == null || f_id == 0L || road == null || sendIP.equals("") || road.equals("") || sendIP == "" || road == "") {
-                                    sendIP = "";
-                                    f_id = 0L;
-                                    road = "";
-                                    ob[0] = "";
-                                    ob[1] = 0L;
-                                    ob[2] = "";
-
-                                    CreatePolicy cp = new CreatePolicy();
-                                    //cp.setOperation(CreateOperation.CREATE_NEW);
-                                    cp.setOperation(CreateOperation.CREATE_NEW_RANDOM);
-                                    String metaStoreClientString = (String) RuntimeEnv.getParam(RuntimeEnv.METASTORE_CLIENT_STRING);
-                                    String[] m = metaStoreClientString.split("\\:");
-                                    Map<String, String> map = (Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_TBNAME);
-                                    MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
-                                    MetaStoreClient cli = mscp.getClient();
-                                    SFile sf2 = null;
-                                    int attemp = 0;
-                                    try {
-                                        IMetaStoreClient icli = cli.getHiveClient();
-
-                                        List<NodeGroup> lng = null;
-                                        attemp = 0;
-                                        while (attemp <= attempSize) {
-                                            try {
-                                                lng = icli.getTableNodeGroups(m[2], map.get(topic));
-                                                break;
-                                            } catch (Exception ex) {
-                                                logger.error("can not get the List<nodeGroup>" + ex, ex);
-                                                rcmetastore(icli);
-                                                attemp++;
-                                            }
-                                            try {
-                                                Thread.sleep(1000);
-                                            } catch (Exception e) {
-                                            }
-                                        }
-
-                                        ArrayList<String> nodeNames = new ArrayList<String>();
-                                        if (lng != null && !lng.isEmpty()) {
-                                            for (NodeGroup ng : lng) {
-                                                for (Node n : ng.getNodes()) {
-                                                    nodeNames.add(n.getNode_name());
-                                                }
-                                            }
-                                        }
-
-                                        int CFretryInterval = CREATEFILE_RETRY_INIT;
-                                        int CFretryAttempt = 0;
-
-                                        while (true) {
-                                            try {
-                                                sf2 = icli.create_file_by_policy(cp, 2, m[2], map.get(topic), list);
-                                                if (sf2 == null) {
-                                                    logger.debug("can not create file for the topic " + topic + " " + keyinterval + " " + node.getName() + " from metastore ");
-                                                    if (CFretryInterval < 300000) {
-                                                        CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
-                                                    } else {
-                                                        CFretryInterval = 300000;
-                                                    }
-                                                    logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
-                                                    try {
-                                                        Thread.sleep(CFretryInterval);
-                                                    } catch (Exception ex) {
-                                                        logger.error(ex, ex);
-                                                    }
-                                                    continue;
-                                                }
-                                                logger.info("create file for the topic " + topic + " " + keyinterval + " " + node.getName() + " from metastore ");
-                                                String nodeN = sf2.getLocations().get(0).getNode_name();
-                                                if (nodeN == null) {
-                                                    if (nodeNames.isEmpty()) {
-                                                        logger.debug("thres is no node in the nodeGroups for " + m[2] + map.get(topic));
-                                                        Thread.sleep(2000);
-                                                        continue;
-                                                    } else {
-                                                        Random r = new Random();
-                                                        int ran = r.nextInt(nodeNames.size());
-                                                        if (nodeNames.get(ran) == null || nodeNames.get(ran).isEmpty()) {
-                                                            logger.debug("thres is null node in the nodeGroups for " + m[2] + map.get(topic));
-                                                            Thread.sleep(2000);
-                                                            continue;
-                                                        }
-                                                        sendIP = nodeNames.get(ran) + rule.getIPList()[0];
-                                                        //sendIP = "192.168.1." + nodeNames.get(ran).substring(4) + rule.getIPList()[0];
-                                                    }
-                                                } else {
-                                                    sendIP = nodeN + rule.getIPList()[0];
-                                                    //sendIP = "192.168.1." + nodeN.substring(4) + rule.getIPList()[0];
-                                                }
-                                                f_id = sf2.getFid();
-                                                road = sf2.getLocations().get(0).getLocation() + "|" + sf2.getLocations().get(0).getDevid();
-
-                                                if (road == null) {
-                                                    sendIP = "";
-                                                    f_id = 0L;
-                                                    road = "";
-                                                    logger.debug("road is null" + " for " + sf2 + topic + " " + keyinterval + " " + node.getName());
-                                                    Thread.sleep(2000);
-                                                    continue;
-                                                }
-
-                                                SendCreateFileCMD scfc = new SendCreateFileCMD(sendIP, f_id, road);
-                                                HttpResponse hp = scfc.send();
-                                                if (hp == null) {
-                                                    logger.error("the file  for " + sf2 + topic + " " + keyinterval + " " + node.getName() + " can not be set online");
-                                                    sendIP = "";
-                                                    f_id = 0L;
-                                                    road = "";
-                                                    sf2.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                                                    attemp = 0;
-                                                    while (attemp <= attempSize) {
-                                                        try {
-                                                            icli.close_file(sf2);
-                                                            break;
-                                                        } catch (Exception ex) {
-                                                            logger.error("can not close the sf " + sf2 + " " + ex, ex);
-                                                            rcmetastore(icli);
-                                                            attemp++;
-                                                        }
-                                                        try {
-                                                            Thread.sleep(1000);
-                                                        } catch (Exception e1) {
-                                                        }
-                                                    }
-
-                                                    if (CFretryInterval < 300000) {
-                                                        CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
-                                                    } else {
-                                                        CFretryInterval = 300000;
-                                                    }
-                                                    logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
-                                                    try {
-                                                        Thread.sleep(CFretryInterval);
-                                                    } catch (Exception ex) {
-                                                        logger.error(ex, ex);
-                                                    }
-
-                                                    continue;
-                                                } else {
-                                                    logger.debug("sendCreateFileCMD : " + hp.getStatusLine());
-                                                    if (hp.getStatusLine().getStatusCode() != 200) {
-                                                        logger.error("the file  for " + sf2 + topic + " " + keyinterval + " " + node.getName() + " can not be set online");
-                                                        sendIP = "";
-                                                        f_id = 0L;
-                                                        road = "";
-                                                        sf2.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                                                        attemp = 0;
-                                                        while (attemp <= attempSize) {
-                                                            try {
-                                                                icli.close_file(sf2);
-                                                                break;
-                                                            } catch (Exception ex) {
-                                                                logger.error("can not close the sf " + sf2 + " " + ex, ex);
-                                                                rcmetastore(icli);
-                                                                attemp++;
-                                                            }
-                                                            try {
-                                                                Thread.sleep(1000);
-                                                            } catch (Exception e1) {
-                                                            }
-                                                        }
-
-                                                        if (CFretryInterval < 300000) {
-                                                            CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
-                                                        } else {
-                                                            CFretryInterval = 300000;
-                                                        }
-                                                        logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
-                                                        try {
-                                                            Thread.sleep(CFretryInterval);
-                                                        } catch (Exception ex) {
-                                                            logger.error(ex, ex);
-                                                        }
-
-                                                        continue;
-                                                    } else {
-                                                        ByteArrayOutputStream out = new ByteArrayOutputStream();
-                                                        try {
-                                                            hp.getEntity().writeTo(out);
-                                                        } catch (Exception ex) {
-                                                            logger.error(ex, ex);
-                                                            logger.error("the file  for " + sf2 + topic + " " + keyinterval + " " + node.getName() + " can not be set online " + hp.getStatusLine());
-                                                            sendIP = "";
-                                                            f_id = 0L;
-                                                            road = "";
-                                                            sf2.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                                                            attemp = 0;
-                                                            while (attemp <= attempSize) {
-                                                                try {
-                                                                    icli.close_file(sf2);
-                                                                    break;
-                                                                } catch (Exception ex2) {
-                                                                    logger.error("can not close the sf " + sf2 + " " + ex2, ex2);
-                                                                    rcmetastore(icli);
-                                                                    attemp++;
-                                                                }
-                                                                try {
-                                                                    Thread.sleep(1000);
-                                                                } catch (Exception e1) {
-                                                                }
-                                                            }
-                                                            if (CFretryInterval < 300000) {
-                                                                CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
-                                                            } else {
-                                                                CFretryInterval = 300000;
-                                                            }
-                                                            logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
-
-                                                            Thread.sleep(CFretryInterval);
-
-                                                            continue;
-                                                        }
-
-                                                        String resonseEn = new String(out.toByteArray());
-                                                        if ("-1".equals(resonseEn.split("[\n]")[0])) {
-                                                            logger.info(resonseEn.split("[\n]")[1]);
-                                                            logger.error("the file  for " + f_id + topic + " " + keyinterval + " " + node.getName() + " can not be set online " + hp.getStatusLine());
-                                                            sendIP = "";
-                                                            f_id = 0L;
-                                                            road = "";
-                                                            sf2.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                                                            attemp = 0;
-                                                            while (attemp <= attempSize) {
-                                                                try {
-                                                                    icli.close_file(sf2);
-                                                                    break;
-                                                                } catch (Exception ex2) {
-                                                                    logger.error("can not close the sf " + sf2 + " " + ex2, ex2);
-                                                                    rcmetastore(icli);
-                                                                    attemp++;
-                                                                }
-                                                                try {
-                                                                    Thread.sleep(1000);
-                                                                } catch (Exception e1) {
-                                                                }
-                                                            }
-
-                                                            if (CFretryInterval < 300000) {
-                                                                CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
-                                                            } else {
-                                                                CFretryInterval = 300000;
-                                                            }
-                                                            logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
-                                                            try {
-                                                                Thread.sleep(CFretryInterval);
-                                                            } catch (Exception ex) {
-                                                                logger.error(ex, ex);
-                                                            }
-
-                                                            continue;
-                                                        } else {
-                                                            logger.info("this file " + f_id + " for the topic " + topic + " to the road " + road + " to the IP " + sendIP + " has been set online");
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                            } catch (Exception ex) {
-                                                logger.error("cannot create the file for " + topic + " " + keyinterval + " " + node.getName() + ex, ex);
-
-                                                rcmetastore(icli);
-                                                if (CFretryInterval < 300000) {
-                                                    CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
-                                                } else {
-                                                    CFretryInterval = 300000;
-                                                }
-                                                logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
-                                                Thread.sleep(CFretryInterval);
-
-                                                continue;
-                                            }
-                                        }
-                                        logger.info("new File for " + topic + " " + keyinterval + " " + node.getName() + " has be created");
-                                    } finally {
-                                        cli.release();
-                                        break;
-                                    }
-                                } else {
-                                    logger.debug("choose the file " + f_id + " to the road " + road + " to the sendIP " + sendIP);
-                                    break;
-                                }
-                            } else {
-                                logger.debug("the lock is exists");
-                                if (ZKretryInterval < 300000) {
-                                    ZKretryInterval = ZKretryInterval + ZOOKEEPER_RETRY_INIT;
-                                } else {
-                                    ZKretryInterval = 300000;
-                                }
-                                logger.info("get the zoookeeper lock " + String.format("On retry attempt %d . Sleeping %d seconds.", ++ZKretryAttempt, ZKretryInterval / 1000));
-                                try {
-                                    Thread.sleep(ZKretryInterval);
-                                } catch (Exception ex) {
-                                    logger.error(ex, ex);
-                                }
-                            }
-                        }
-                        zk.close();
-                        logger.debug("disconnect the zookeeper");
-                    } else {
-                        logger.info("choose the file " + f_id + " to the road " + road + " to the sendIP " + sendIP);
-                    }
-
-                    synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_VALUE_TO_FILE)) {
-                        ob[0] = sendIP;
-                        ob[1] = f_id;
-                        ob[2] = road;
-                        valueToFile.put(topic + keyinterval + node.getName(), ob);
-                        logger.info("choose the " + topic + " " + keyinterval + " " + node.getName() + " " + ob[0] + " " + ob[1] + " " + ob[2]);
-                    }
-                    HANDLER_CLIENT_SIZE.decrementAndGet();
-                    break;
-                } else {
-                    logger.debug("Handler Client for get file Size is larger than " + HANDLER_CLIENT_SIZE_MAX);
-                    try {
-                        Thread.sleep(5000);
-                    } catch (InterruptedException ex) {
-                        logger.error(ex, ex);
-                    }
-                }
-            }
+            checkFileForInverval();
         }
-
 
         int timenum = 0;
 
@@ -582,7 +158,7 @@ public class DataSenderThread implements Runnable {
                         }
                     }
 
-                    SendToServiceThread sendT = new SendToServiceThread(sendData, node, topic, serviceName, rule, sendIP, keyinterval, f_id, road, count);
+                    SendToServiceThread sendT = new SendToServiceThread(sendData, node, topic, serviceName, rule, sendIP, keyinterval, f_id, road, count, version);
                     while (sendThreadPool.activeCount() >= sendThreadPoolSize) {
                         logger.debug("the sendThreadPool for " + topic + " " + keyinterval + " " + node.getName() + " is full...");
                         try {
@@ -621,6 +197,10 @@ public class DataSenderThread implements Runnable {
         }
     }
 
+    /**
+     *
+     * package the data to a message
+     */
     byte[] pack(ArrayBlockingQueue abq) {
         Protocol protocoldocs = Protocol.parse(docsSchemaContent);
         Schema docs = protocoldocs.getType(GlobalVariables.DOCS);
@@ -666,52 +246,28 @@ public class DataSenderThread implements Runnable {
         return docsbaos.toByteArray();
     }
 
-    private Object[] getFileFromMetaDB(String topic, List<SplitValue> list) {
+    /**
+     *
+     * get file from the metadb after get the zk lock
+     */
+    private Object[] getFileFromMetaDB(List<SplitValue> list) {
         Object[] ob = new Object[3];
         String getsendIP = "";
         Long getf_id = 0L;
         String getroad = "";
 
-        String metaStoreClientString = (String) RuntimeEnv.getParam(RuntimeEnv.METASTORE_CLIENT_STRING);
-        String[] m = metaStoreClientString.split("\\:");
-        Map<String, String> map = (Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_TBNAME);
         MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
         MetaStoreClient cli = mscp.getClient();
         try {
             IMetaStoreClient icli = cli.getHiveClient();
 
-            List<NodeGroup> lng = null;
+            List<SFile> lsf = null;
+
             int attemp = 0;
             while (attemp <= attempSize) {
                 try {
-                    lng = icli.getTableNodeGroups(m[2], map.get(topic));
-                    break;
-                } catch (Exception ex) {
-                    logger.error("can not get the List<nodeGroup>" + ex, ex);
-                    rcmetastore(icli);
-                    attemp++;
-                }
-                try {
-                    Thread.sleep(1000);
-                } catch (Exception e) {
-                }
-            }
-
-            ArrayList<String> nodeNames = new ArrayList<String>();
-            if (lng != null && !lng.isEmpty()) {
-                for (NodeGroup ng : lng) {
-                    for (Node n : ng.getNodes()) {
-                        nodeNames.add(n.getNode_name());
-                    }
-                }
-            }
-
-            List<SFile> lsf = null;
-
-            attemp = 0;
-            while (attemp <= attempSize) {
-                try {
-                    lsf = icli.filterTableFiles(m[2], map.get(topic), list);
+                    lsf = icli.filterTableFiles(rule.getPartType().split("\\|")[0], rule.getPartType().split("\\|")[1], list);
+                    logger.info("get the filelist for " + topic + " " + rule.getPartType().split("\\|")[0] + " " + rule.getPartType().split("\\|")[1] + " " + list + " " + lsf);
                     break;
                 } catch (Exception ex) {
                     logger.error("can not get the SFileList " + ex, ex);
@@ -755,22 +311,7 @@ public class DataSenderThread implements Runnable {
 
                         if (aomlsf.getLocations() == null) {
                             logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has no locations");
-                            aomlsf.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                            attemp = 0;
-                            while (attemp <= attemp) {
-                                try {
-                                    icli.close_file(aomlsf);
-                                    break;
-                                } catch (Exception ex) {
-                                    logger.error("can not close the file " + aomlsf + " " + ex, ex);
-                                    rcmetastore(icli);
-                                    attemp++;
-                                }
-                                try {
-                                    Thread.sleep(1000);
-                                } catch (Exception e) {
-                                }
-                            }
+                            setBad(icli, aomlsf);
                             aolsf.remove(aomlsf);
                             alsf.remove(aomlsf);
                             continue;
@@ -787,22 +328,7 @@ public class DataSenderThread implements Runnable {
 
                         if (visit == -1) {
                             logger.info("there is no location is online in the file " + aomlsf);
-                            aomlsf.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                            attemp = 0;
-                            while (attemp <= attempSize) {
-                                try {
-                                    icli.close_file(aomlsf);
-                                    break;
-                                } catch (Exception ex) {
-                                    logger.error("can not close the file " + aomlsf + " " + ex, ex);
-                                    rcmetastore(icli);
-                                    attemp++;
-                                }
-                                try {
-                                    Thread.sleep(1000);
-                                } catch (Exception e) {
-                                }
-                            }
+                            setBad(icli, aomlsf);
                             aolsf.remove(aomlsf);
                             alsf.remove(aomlsf);
                         } else {
@@ -813,22 +339,7 @@ public class DataSenderThread implements Runnable {
                                 getroad = aomlsf.getLocations().get(visit).getLocation() + "|" + aomlsf.getLocations().get(visit).getDevid();
                                 if (getsendIP == null || getf_id == 0L || getroad == null || getsendIP.equals("") || getroad.equals("") || getsendIP == "" || getroad == "") {
                                     logger.info("there is unvaid information in the file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP);
-                                    aomlsf.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                                    attemp = 0;
-                                    while (attemp <= attempSize) {
-                                        try {
-                                            icli.close_file(aomlsf);
-                                            break;
-                                        } catch (Exception ex) {
-                                            logger.error("can not close the file " + aomlsf + " " + ex, ex);
-                                            rcmetastore(icli);
-                                            attemp++;
-                                        }
-                                        try {
-                                            Thread.sleep(1000);
-                                        } catch (Exception e) {
-                                        }
-                                    }
+                                    setBad(icli, aomlsf);
                                     aolsf.remove(aomlsf);
                                     alsf.remove(aomlsf);
                                 } else {
@@ -838,22 +349,7 @@ public class DataSenderThread implements Runnable {
                                 }
                             } catch (Exception e) {
                                 logger.info("there is no online location in the file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP);
-                                aomlsf.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                                attemp = 0;
-                                while (attemp <= attempSize) {
-                                    try {
-                                        icli.close_file(aomlsf);
-                                        break;
-                                    } catch (Exception ex) {
-                                        logger.error("can not close the file " + aomlsf + " " + ex, ex);
-                                        rcmetastore(icli);
-                                        attemp++;
-                                    }
-                                    try {
-                                        Thread.sleep(1000);
-                                    } catch (Exception e1) {
-                                    }
-                                }
+                                setBad(icli, aomlsf);
                                 aolsf.remove(aomlsf);
                                 alsf.remove(aomlsf);
                             }
@@ -926,22 +422,7 @@ public class DataSenderThread implements Runnable {
                                 int visit = -1;
                                 if (aomlsf.getLocations() == null) {
                                     logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has no locations");
-                                    aomlsf.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                                    attemp = 0;
-                                    while (attemp <= attempSize) {
-                                        try {
-                                            icli.close_file(aomlsf);
-                                            break;
-                                        } catch (Exception ex) {
-                                            logger.error("can not close the file " + aomlsf + " " + ex, ex);
-                                            rcmetastore(icli);
-                                            attemp++;
-                                        }
-                                        try {
-                                            Thread.sleep(1000);
-                                        } catch (Exception e1) {
-                                        }
-                                    }
+                                    setBad(icli, aomlsf);
                                     alsf.remove(aomlsf);
                                 } else {
                                     for (int i = 0; i < aomlsf.getLocations().size(); i++) {
@@ -953,22 +434,7 @@ public class DataSenderThread implements Runnable {
 
                                     if (visit == -1) {
                                         logger.info("there is no location is online in the file " + aomlsf);
-                                        aomlsf.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                                        attemp = 0;
-                                        while (attemp <= attempSize) {
-                                            try {
-                                                icli.close_file(aomlsf);
-                                                break;
-                                            } catch (Exception ex) {
-                                                logger.error("can not close the file " + aomlsf + " " + ex, ex);
-                                                rcmetastore(icli);
-                                                attemp++;
-                                            }
-                                            try {
-                                                Thread.sleep(1000);
-                                            } catch (Exception e1) {
-                                            }
-                                        }
+                                        setBad(icli, aomlsf);
                                         alsf.remove(aomlsf);
                                     } else {
                                         try {
@@ -981,22 +447,7 @@ public class DataSenderThread implements Runnable {
                                                 getf_id = 0L;
                                                 getroad = "";
                                                 logger.info("there is unvalid information in the file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP);
-                                                aomlsf.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                                                attemp = 0;
-                                                while (attemp <= attempSize) {
-                                                    try {
-                                                        icli.close_file(aomlsf);
-                                                        break;
-                                                    } catch (Exception ex) {
-                                                        logger.error("can not close the file " + aomlsf + " " + ex, ex);
-                                                        rcmetastore(icli);
-                                                        attemp++;
-                                                    }
-                                                    try {
-                                                        Thread.sleep(1000);
-                                                    } catch (Exception e1) {
-                                                    }
-                                                }
+                                                setBad(icli, aomlsf);
                                                 alsf.remove(aomlsf);
                                             } else {
                                                 logger.debug("this file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP + " has online location");
@@ -1008,22 +459,7 @@ public class DataSenderThread implements Runnable {
                                             getf_id = 0L;
                                             getroad = "";
                                             logger.info("there is no online location in the file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP);
-                                            aomlsf.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                                            attemp = 0;
-                                            while (attemp <= attempSize) {
-                                                try {
-                                                    icli.close_file(aomlsf);
-                                                    break;
-                                                } catch (Exception ex) {
-                                                    logger.error("can not close the file " + aomlsf + " " + ex, ex);
-                                                    rcmetastore(icli);
-                                                    attemp++;
-                                                }
-                                                try {
-                                                    Thread.sleep(1000);
-                                                } catch (Exception e1) {
-                                                }
-                                            }
+                                            setBad(icli, aomlsf);
                                             alsf.remove(aomlsf);
                                         }
                                     }
@@ -1052,6 +488,10 @@ public class DataSenderThread implements Runnable {
         return ob;
     }
 
+    /**
+     *
+     * reconnect the metastore until it is connected
+     */
     public synchronized void rcmetastore(IMetaStoreClient icli) {
         int MSretryInterval = METASTORE_RETRY_INIT;
         int MSretryAttempt = 0;
@@ -1060,10 +500,10 @@ public class DataSenderThread implements Runnable {
                 icli.reconnect();
                 break;
             } catch (MetaException ex) {
-                if (MSretryInterval <= 300000) {
+                if (MSretryInterval <= 30000) {
                     MSretryInterval = MSretryInterval + METASTORE_RETRY_INIT;
                 } else {
-                    MSretryInterval = 300000;
+                    MSretryInterval = 30000;
                 }
 
                 logger.info("metastore " + String.format("On retry attempt %d . Sleeping %d seconds.", ++MSretryAttempt, MSretryInterval / 1000));
@@ -1076,52 +516,28 @@ public class DataSenderThread implements Runnable {
         }
     }
 
-    private Object[] getUsefulFileFromMetaDB(String topic, List<SplitValue> list) {
+    /**
+     *
+     * get file from the metastore before get the zk lock
+     */
+    private Object[] getUsefulFileFromMetaDB(List<SplitValue> list) {
         Object[] ob = new Object[3];
         String getsendIP = "";
         Long getf_id = 0L;
         String getroad = "";
 
-        String metaStoreClientString = (String) RuntimeEnv.getParam(RuntimeEnv.METASTORE_CLIENT_STRING);
-        String[] m = metaStoreClientString.split("\\:");
-        Map<String, String> map = (Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_TBNAME);
+        String partType = rule.getPartType();
         MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
         MetaStoreClient cli = mscp.getClient();
         try {
             IMetaStoreClient icli = cli.getHiveClient();
+            List<SFile> lsf = null;
 
-            List<NodeGroup> lng = null;
             int attemp = 0;
             while (attemp <= attempSize) {
                 try {
-                    lng = icli.getTableNodeGroups(m[2], map.get(topic));
-                    break;
-                } catch (Exception ex) {
-                    logger.error("can not get the List<nodeGroup>" + ex, ex);
-                    rcmetastore(icli);
-                    attemp++;
-                }
-                try {
-                    Thread.sleep(1000);
-                } catch (Exception e) {
-                }
-            }
-
-            ArrayList<String> nodeNames = new ArrayList<String>();
-            if (lng != null && !lng.isEmpty()) {
-                for (NodeGroup ng : lng) {
-                    for (Node n : ng.getNodes()) {
-                        nodeNames.add(n.getNode_name());
-                    }
-                }
-            }
-
-            List<SFile> lsf = null;
-
-            attemp = 0;
-            while (attemp <= attempSize) {
-                try {
-                    lsf = icli.filterTableFiles(m[2], map.get(topic), list);
+                    lsf = icli.filterTableFiles(partType.split("\\|")[0], partType.split("\\|")[1], list);
+                    logger.info("get the filelist for " + topic + " " + partType.split("\\|")[0] + " " + partType.split("\\|")[1] + " " + list + " " + lsf);
                     break;
                 } catch (Exception ex) {
                     logger.error("can not get the SFileList " + ex, ex);
@@ -1186,22 +602,7 @@ public class DataSenderThread implements Runnable {
                                     getroad = aomlsf.getLocations().get(visit).getLocation() + "|" + aomlsf.getLocations().get(visit).getDevid();
                                     if (getsendIP == null || getf_id == 0L || getroad == null || getsendIP.equals("") || getroad.equals("") || getsendIP == "" || getroad == "") {
                                         logger.info("there is unvaid information in the file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP);
-                                        aomlsf.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
-                                        attemp = 0;
-                                        while (attemp <= attempSize) {
-                                            try {
-                                                icli.close_file(aomlsf);
-                                                break;
-                                            } catch (Exception ex) {
-                                                logger.error("can not close the file " + aomlsf + " " + ex, ex);
-                                                rcmetastore(icli);
-                                                attemp++;
-                                            }
-                                            try {
-                                                Thread.sleep(1000);
-                                            } catch (Exception e) {
-                                            }
-                                        }
+                                        setBad(icli, aomlsf);
                                         aolsf.remove(aomlsf);
                                         alsf.remove(aomlsf);
                                     } else {
@@ -1213,7 +614,7 @@ public class DataSenderThread implements Runnable {
                                 }
                             }
                         }
-                    }else{
+                    } else {
                         logger.info(" the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " has no available and useful file");
                     }
                 } else {
@@ -1229,6 +630,453 @@ public class DataSenderThread implements Runnable {
         ob[0] = getsendIP;
         ob[1] = getf_id;
         ob[2] = getroad;
+        return ob;
+    }
+
+    /**
+     *
+     * check and get a file for the invervla ,if metastore has no such file ,
+     * create a new one
+     */
+    private void checkFileForInverval() {
+        String sendIP = "";
+        Long f_id = 0L;
+        String road = "";
+        while (true) {
+            if (HANDLER_CLIENT_SIZE.longValue() < HANDLER_CLIENT_SIZE_MAX) {
+                HANDLER_CLIENT_SIZE.addAndGet(1L);
+                Object[] ob = new Object[3];
+
+                String[] keytime = keyinterval.split("\\|");
+
+                Long stime = 0L;
+                Long etime = 0L;
+
+                try {
+                    Date ds = dateFormat.parse(keytime[0]);
+                    Date de = dateFormat.parse(keytime[1]);
+                    stime = ds.getTime() / 1000;
+                    etime = de.getTime() / 1000;
+                } catch (ParseException ex) {
+                    logger.info(ex, ex);
+                } catch (Exception ex) {
+                    logger.error(ex, ex);
+                }
+
+                List<SplitValue> list = new ArrayList<SplitValue>();
+                for (int j = 1; j <= 2; j++) { //设置一级和二级划分值
+                    if (j == 1) {
+                        SplitValue sv1 = new SplitValue();
+                        sv1.setVerison(version);
+                        sv1.setLevel(j);//如果是interval分区，设置两个特征值，一个是上限一个是下限
+                        sv1.setValue("" + stime);
+                        sv1.setSplitKeyName(rule.getKeywords().split("\\|")[0]);
+                        list.add(sv1);
+
+                        SplitValue sv2 = new SplitValue();
+                        sv2.setVerison(version);
+                        sv2.setLevel(j);//如果是interval分区，设置两个特征值，一个是上限一个是下限
+                        sv2.setValue("" + etime);
+                        sv2.setSplitKeyName(rule.getKeywords().split("\\|")[0]);
+                        list.add(sv2);
+                    } else if (j == 2) {
+                        SplitValue sv = new SplitValue();
+                        sv.setVerison(version);
+                        sv.setLevel(j);
+                        sv.setValue(rule.getNodeUrls().size() + "-" + node.getName());//设置哈希键值
+                        sv.setSplitKeyName(rule.getKeywords().split("\\|")[1]);
+                        list.add(sv);
+                    }
+                }
+
+                ob = getUsefulFileFromMetaDB(list);
+
+                sendIP = (String) ob[0];
+                f_id = (Long) ob[1];
+                road = (String) ob[2];
+
+                if (sendIP == null || f_id == 0L || road == null || sendIP.equals("") || road.equals("") || sendIP == "" || road == "") {
+                    sendIP = "";
+                    f_id = 0L;
+                    road = "";
+                    ob[0] = "";
+                    ob[1] = 0L;
+                    ob[2] = "";
+                    logger.info("need to get zk for " + topic + " " + keyinterval + " " + node.getName());
+                    String zkCluster = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
+
+                    int zkSessionTimeout = 30000;
+                    ZkClient zk = new ZkClient(zkCluster, zkSessionTimeout);
+                    int ZKretryInterval = ZOOKEEPER_RETRY_INIT;
+                    int ZKretryAttempt = 0;
+
+                    while (true) {
+                        if (!zk.exists("/ulss")) {
+                            logger.debug("existsss " + zk.exists("/ulss"));
+                            try {
+                                zk.createPersistent("/ulss");
+                                logger.debug("/ulss created");
+                            } catch (Exception e) {
+                                logger.debug("root exists : other master has created the /ulss");
+                            }
+                        }
+
+                        if (!zk.exists("/ulss/redistribution")) {
+                            logger.debug("existsss " + zk.exists("/ulss/redistribution"));
+                            try {
+                                zk.createPersistent("/ulss/redistribution");
+                                logger.debug("/ulss/redistribution created");
+                            } catch (Exception e) {
+                                logger.debug("root exists : other master has created the /ulss/redistribution");
+                            }
+                        }
+
+                        if (!zk.exists("/ulss/redistribution/lock")) {
+
+                            try {
+                                zk.createEphemeral("/ulss/redistribution/" + topic + keyinterval + "lock", keyinterval);
+                                logger.debug("new lock " + topic + keyinterval + "lock" + " created");
+                            } catch (Exception e) {
+                                logger.debug("the lock has been created");
+                                try {
+                                    Thread.sleep(2000);
+                                } catch (Exception ex) {
+                                    logger.info(ex, ex);
+                                }
+                                continue;
+                            }
+
+                            ob = getFileFromMetaDB(list);
+                            sendIP = (String) ob[0];
+                            f_id = (Long) ob[1];
+                            road = (String) ob[2];
+
+                            if (sendIP == null || f_id == 0L || road == null || sendIP.equals("") || road.equals("")) {
+                                sendIP = "";
+                                f_id = 0L;
+                                road = "";
+                                ob[0] = "";
+                                ob[1] = 0L;
+                                ob[2] = "";
+
+                                ob = createNewFile(list);
+                                if ("".equals((String) ob[0]) && (Long) ob[1] == 0L && "".equals((String) ob[2])) {
+                                    continue;
+                                } else {
+                                    sendIP = (String) ob[0];
+                                    f_id = (Long) ob[1];
+                                    road = (String) ob[2];
+                                    break;
+                                }
+                            } else {
+                                logger.debug("choose the file " + f_id + " to the road " + road + " to the sendIP " + sendIP);
+                                break;
+                            }
+                        } else {
+                            logger.debug("the lock is exists");
+                            if (ZKretryInterval < 30000) {
+                                ZKretryInterval = ZKretryInterval + ZOOKEEPER_RETRY_INIT;
+                            } else {
+                                ZKretryInterval = 30000;
+                            }
+                            logger.info("get the zoookeeper lock " + String.format("On retry attempt %d . Sleeping %d seconds.", ++ZKretryAttempt, ZKretryInterval / 1000));
+                            try {
+                                Thread.sleep(ZKretryInterval);
+                            } catch (Exception ex) {
+                                logger.error(ex, ex);
+                            }
+                        }
+                    }
+                    zk.close();
+                    logger.debug("disconnect the zookeeper");
+                } else {
+                    logger.info("choose the file " + f_id + " to the road " + road + " to the sendIP " + sendIP);
+                }
+
+                synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_VALUE_TO_FILE)) {
+                    valueToFile.put(topic + keyinterval + node.getName(), ob);
+                    logger.info("choose the " + topic + " " + keyinterval + " " + node.getName() + " " + ob[0] + " " + ob[1] + " " + ob[2]);
+                }
+                HANDLER_CLIENT_SIZE.decrementAndGet();
+                break;
+            } else {
+                logger.debug("Handler Client for get file Size is larger than " + HANDLER_CLIENT_SIZE_MAX);
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException ex) {
+                    logger.error(ex, ex);
+                }
+            }
+        }
+    }
+
+    /**
+     *
+     * set the file bad , it means this file will not be used again
+     *
+     */
+    public void setBad(IMetaStoreClient icli, SFile sf) {
+        int attemp = 0;
+        while (attemp <= attempSize) {
+            try {
+                //sf.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
+                icli.set_loadstatus_bad(sf.getFid());
+                logger.error("has set bad the file " + sf);
+                //icli.close_file(aomlsf);
+                break;
+            } catch (Exception ex) {
+                logger.error("can not set bad the file " + sf + " " + ex, ex);
+                rcmetastore(icli);
+                attemp++;
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (Exception e) {
+            }
+        }
+    }
+
+    /**
+     *
+     * create a new file by the interval
+     *
+     */
+    private Object[] createNewFile(List<SplitValue> list) {
+        String sendIP = "";
+        Long f_id = 0L;
+        String road = "";
+        Object[] ob = new Object[3];
+        ob[0] = "";
+        ob[1] = 0L;
+        ob[2] = "";
+
+        CreatePolicy cp = new CreatePolicy();
+        //cp.setOperation(CreateOperation.CREATE_NEW);
+        cp.setOperation(CreateOperation.CREATE_NEW_RANDOM);
+        MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
+        MetaStoreClient cli = mscp.getClient();
+        SFile sf2 = null;
+        int attemp = 0;
+        try {
+            IMetaStoreClient icli = cli.getHiveClient();
+
+            List<NodeGroup> lng = null;
+            attemp = 0;
+            while (attemp <= attempSize) {
+                try {
+                    lng = icli.getTableNodeGroups(rule.getPartType().split("\\|")[0], rule.getPartType().split("\\|")[1]);
+                    break;
+                } catch (Exception ex) {
+                    logger.error("can not get the List<nodeGroup>" + ex, ex);
+                    rcmetastore(icli);
+                    attemp++;
+                }
+                try {
+                    Thread.sleep(1000);
+                } catch (Exception e) {
+                }
+            }
+
+            ArrayList<String> nodeNames = new ArrayList<String>();
+            if (lng != null && !lng.isEmpty()) {
+                for (NodeGroup ng : lng) {
+                    for (Node n : ng.getNodes()) {
+                        nodeNames.add(n.getNode_name());
+                    }
+                }
+            }
+
+            int CFretryInterval = CREATEFILE_RETRY_INIT;
+            int CFretryAttempt = 0;
+
+            while (true) {
+                try {
+                    logger.info("begin to create file " + rule.getPartType().split("\\|")[0] + " " + rule.getPartType().split("\\|")[1] + " " + list);
+                    sf2 = icli.create_file_by_policy(cp, 2, rule.getPartType().split("\\|")[0], rule.getPartType().split("\\|")[1], list);
+                    if (sf2 == null) {
+                        logger.debug("can not create file for the topic " + topic + " " + keyinterval + " " + node.getName() + " from metastore ");
+                        if (CFretryInterval < 30000) {
+                            CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
+                        } else {
+                            CFretryInterval = 30000;
+                        }
+                        logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+                        try {
+                            Thread.sleep(CFretryInterval);
+                        } catch (Exception ex) {
+                            logger.error(ex, ex);
+                        }
+                        continue;
+                    }
+                    logger.info("create file for the topic " + topic + " " + keyinterval + " " + node.getName() + " from metastore ");
+                    String nodeN = sf2.getLocations().get(0).getNode_name();
+                    if (nodeN == null) {
+                        if (nodeNames.isEmpty()) {
+                            logger.debug("thres is no node in the nodeGroups for " + rule.getPartType().split("\\|")[0] + rule.getPartType().split("\\|")[1]);
+                            try {
+                                Thread.sleep(2000);
+                            } catch (Exception ex) {
+                                logger.error(ex, ex);
+                            }
+                            continue;
+                        } else {
+                            Random r = new Random();
+                            int ran = r.nextInt(nodeNames.size());
+                            if (nodeNames.get(ran) == null || nodeNames.get(ran).isEmpty()) {
+                                logger.debug("thres is null node in the nodeGroups for " + rule.getPartType().split("\\|")[0] + rule.getPartType().split("\\|")[1]);
+                                try {
+                                    Thread.sleep(2000);
+                                } catch (Exception ex) {
+                                    logger.error(ex, ex);
+                                }
+                                continue;
+                            }
+                            sendIP = nodeNames.get(ran) + rule.getIPList()[0];
+                            //sendIP = "192.168.1." + nodeNames.get(ran).substring(4) + rule.getIPList()[0];
+                        }
+                    } else {
+                        sendIP = nodeN + rule.getIPList()[0];
+                        //sendIP = "192.168.1." + nodeN.substring(4) + rule.getIPList()[0];
+                    }
+                    f_id = sf2.getFid();
+                    road = sf2.getLocations().get(0).getLocation() + "|" + sf2.getLocations().get(0).getDevid();
+
+                    if (road == null) {
+                        sendIP = "";
+                        f_id = 0L;
+                        road = "";
+                        logger.debug("road is null" + " for " + sf2 + topic + " " + keyinterval + " " + node.getName());
+                        try {
+                            Thread.sleep(2000);
+                        } catch (Exception ex) {
+                            logger.error(ex, ex);
+                        }
+                        continue;
+                    }
+
+                    SendCreateFileCMD scfc = new SendCreateFileCMD(sendIP, f_id, road);
+                    HttpResponse hp = scfc.send();
+                    if (hp == null) {
+                        logger.error("the file  for " + sf2 + topic + " " + keyinterval + " " + node.getName() + " can not be set online");
+                        sendIP = "";
+                        f_id = 0L;
+                        road = "";
+                        setBad(icli, sf2);
+
+                        if (CFretryInterval < 30000) {
+                            CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
+                        } else {
+                            CFretryInterval = 30000;
+                        }
+                        logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+                        try {
+                            Thread.sleep(CFretryInterval);
+                        } catch (Exception ex) {
+                            logger.error(ex, ex);
+                        }
+
+                        continue;
+                    } else {
+                        logger.debug("sendCreateFileCMD : " + hp.getStatusLine());
+                        if (hp.getStatusLine().getStatusCode() != 200) {
+                            logger.error("the file  for " + sf2 + topic + " " + keyinterval + " " + node.getName() + " can not be set online");
+                            sendIP = "";
+                            f_id = 0L;
+                            road = "";
+                            setBad(icli, sf2);
+
+                            if (CFretryInterval < 30000) {
+                                CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
+                            } else {
+                                CFretryInterval = 30000;
+                            }
+                            logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+                            try {
+                                Thread.sleep(CFretryInterval);
+                            } catch (Exception ex) {
+                                logger.error(ex, ex);
+                            }
+
+                            continue;
+                        } else {
+                            ByteArrayOutputStream out = new ByteArrayOutputStream();
+                            try {
+                                hp.getEntity().writeTo(out);
+                            } catch (Exception ex) {
+                                logger.error(ex, ex);
+                                logger.error("the file  for " + sf2 + topic + " " + keyinterval + " " + node.getName() + " can not be set online " + hp.getStatusLine());
+                                sendIP = "";
+                                f_id = 0L;
+                                road = "";
+                                setBad(icli, sf2);
+                                if (CFretryInterval < 30000) {
+                                    CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
+                                } else {
+                                    CFretryInterval = 30000;
+                                }
+                                logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+
+                                try {
+                                    Thread.sleep(CFretryInterval);
+                                } catch (Exception ex2) {
+                                    logger.error(ex2, ex2);
+                                }
+                                continue;
+                            }
+
+                            String resonseEn = new String(out.toByteArray());
+                            if ("-1".equals(resonseEn.split("[\n]")[0])) {
+                                logger.info(resonseEn.split("[\n]")[1]);
+                                logger.error("the file  for " + f_id + topic + " " + keyinterval + " " + node.getName() + " can not be set online " + hp.getStatusLine());
+                                sendIP = "";
+                                f_id = 0L;
+                                road = "";
+
+                                setBad(icli, sf2);
+
+                                if (CFretryInterval < 30000) {
+                                    CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
+                                } else {
+                                    CFretryInterval = 30000;
+                                }
+                                logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+                                try {
+                                    Thread.sleep(CFretryInterval);
+                                } catch (Exception ex) {
+                                    logger.error(ex, ex);
+                                }
+
+                                continue;
+                            } else {
+                                logger.info("this file " + f_id + " for the topic " + topic + " to the road " + road + " to the IP " + sendIP + " has been set online");
+                                ob[0] = sendIP;
+                                ob[1] = f_id;
+                                ob[2] = road;
+                                break;
+                            }
+                        }
+                    }
+                }catch (Exception ex) {
+                    logger.error("cannot create the file for " + topic + " " + keyinterval + " " + node.getName() + ex, ex);
+                    rcmetastore(icli);
+                    if (CFretryInterval < 30000) {
+                        CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
+                    } else {
+                        CFretryInterval = 30000;
+                    }
+                    logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+                    try {
+                        Thread.sleep(CFretryInterval);
+                    } catch (Exception ex1) {
+                        logger.error(ex1, ex1);
+                    }
+                    continue;
+                }
+            }
+            logger.info("new File for " + topic + " " + keyinterval + " " + node.getName() + " has be created");
+        } finally {
+            cli.release();
+        }
         return ob;
     }
 }

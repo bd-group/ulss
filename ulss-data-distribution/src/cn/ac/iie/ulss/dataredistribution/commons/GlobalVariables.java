@@ -17,7 +17,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
@@ -31,6 +30,7 @@ public class GlobalVariables {
     public static final String SYN_VALUE_TO_FILE = "synValueToFile";
     public static final String SYN_MESSAGETRANSFERSTATION = "synMessageTransferStation";
     public static final String SYN_STORE_STRANDEDDATA = "synStoreStrandedData";
+    public static final String SYN_STORE_USELESSDATA = "synStoreUselessData";
     public static final String SYN_STORE_UNVALIDDATA = "synStoreUnvalidData";
     public static final String SYN_DIR = "synDir";
     public static final String SYN_METASTORE_CLIENT = "synMetaStoreClient";
@@ -47,18 +47,20 @@ public class GlobalVariables {
     public static final String STRANDED_DATA_TRANSMIT = "strandedDataTransmit";
     public static final String STRANDED_DATA_SEND = "strandedDataSend";
     public static final String STRANDED_DATA_STORE = "strandedDataStore";
+    public static final String USELESS_DATA_STORE = "uselessDataStore";
     public static final String UNVALID_DATA_STORE = "unvalidDataStore";
     public static final String TOPIC_TO_SEND_THREADPOOL = "topicToSendThreadPool";
     public static final String TOPIC_TO_SCHEMACONTENT = "topicToSchemaContent";
     public static final String TOPIC_TO_SCHEMANAME = "topicToSchemaName";
     public static final String DOCS_SCHEMA_CONTENT = "docsSchemaContent";
     public static final String TOPIC_TO_TBNAME = "topicToTBName";
-    public static final String TBNAME_TO_TOPIC = "TBNameToTopic";
+    public static final String META_TO_TOPIC = "metaToTopic";
     public static final String NODE_TO_RULE = "nodeToRule";
     public static final String DOCS = "docs";
     public static final String DOC_SET = "doc_set";
     public static final String DOC_SCHEMA_NAME = "doc_schema_name";
     public static final String SIGN = "sign";
+    public static final String TRANSMITRULE = "transmitrule";
     static Logger logger = null;
 
     static {
@@ -71,6 +73,7 @@ public class GlobalVariables {
      * init the Global Variables
      */
     public static void initialize() {
+
         byte[] synCount = new byte[0];
         RuntimeEnv.addParam(SYN_COUNT, synCount);
 
@@ -82,6 +85,9 @@ public class GlobalVariables {
 
         byte[] synStoreStrandedData = new byte[0];
         RuntimeEnv.addParam(SYN_STORE_STRANDEDDATA, synStoreStrandedData);
+
+        byte[] synStoreUselssData = new byte[0];
+        RuntimeEnv.addParam(SYN_STORE_USELESSDATA, synStoreUselssData);
 
         byte[] synStoreUnvalidData = new byte[0];
         RuntimeEnv.addParam(SYN_STORE_UNVALIDDATA, synStoreUnvalidData);
@@ -104,12 +110,7 @@ public class GlobalVariables {
         RuntimeEnv.addParam(RULE_TO_COUNT, ruleToCount);
 
         logger.info("setting the MetaStoreClientPool to the Global Variables");
-        String metaStoreClientString = (String) RuntimeEnv.getParam("metaStoreClientString");
-        String[] m = metaStoreClientString.split("\\:");
-        int metaStoreClientPoolSize = (Integer) RuntimeEnv.getParam("metaStoreClientPoolSize");
-        HiveConf hc = new HiveConf();
-        hc.set("hive.metastore.uris", "thrift://" + m[0] + ":" + m[1]);
-        MetaStoreClientPool mscp = new MetaStoreClientPool(metaStoreClientPoolSize, hc);
+        MetaStoreClientPool mscp = null;
         RuntimeEnv.addParam(METASTORE_CLIENT_POOL, mscp);
 
         logger.info("setting the topicToRules to the Global Variables");
@@ -159,6 +160,10 @@ public class GlobalVariables {
         ConcurrentHashMap<Rule, ArrayBlockingQueue> strandedDataStore = new ConcurrentHashMap<Rule, ArrayBlockingQueue>();
         RuntimeEnv.addParam(STRANDED_DATA_STORE, strandedDataStore);
 
+        logger.info("setting the uselessDataStore for store to the Global Variables");
+        ConcurrentHashMap<String, ArrayBlockingQueue> uselessDataStore = new ConcurrentHashMap<String, ArrayBlockingQueue>();
+        RuntimeEnv.addParam(USELESS_DATA_STORE, uselessDataStore);
+
         logger.info("setting the unvalidDataStore for store to the Global Variables");
         ConcurrentHashMap<Rule, ArrayBlockingQueue> unvalidDataStore = new ConcurrentHashMap<Rule, ArrayBlockingQueue>();
         RuntimeEnv.addParam(UNVALID_DATA_STORE, unvalidDataStore);
@@ -175,14 +180,20 @@ public class GlobalVariables {
         Map<String, String> topicToSchemaName = new HashMap<String, String>();
         RuntimeEnv.addParam(TOPIC_TO_SCHEMANAME, topicToSchemaName);
 
-        logger.info("setting the topicToTBName and TBNameToTopic to the Global Variables");
+        logger.info("setting the topicToTBName to the Global Variables");
         Map<String, String> topicToTBName = new HashMap<String, String>();
-        Map<String, String> TBNameToTopic = new HashMap<String, String>();
         RuntimeEnv.addParam(TOPIC_TO_TBNAME, topicToTBName);
-        RuntimeEnv.addParam(TBNAME_TO_TOPIC, TBNameToTopic);
 
+        logger.info("setting the metaToTopic to the Global Variables");
+        Map<String, String> metaToTopic = new HashMap<String, String>();
+        RuntimeEnv.addParam(META_TO_TOPIC, metaToTopic);
+        
         logger.info("setting the nodeToRule to the Global Variables");
         Map<RNode, Rule> nodeToRule = new HashMap<RNode, Rule>();
         RuntimeEnv.addParam(NODE_TO_RULE, nodeToRule);
+
+        logger.info("setting the transmitrule to the Global Variables");
+        ArrayList<String> transmitrule = new ArrayList<String>();
+        RuntimeEnv.addParam(TRANSMITRULE, transmitrule);
     }
 }

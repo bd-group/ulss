@@ -10,6 +10,7 @@ import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -60,7 +61,7 @@ public class TransmitThread implements Runnable {
     Map<RNode, Object> sendRows = null;
     static Integer sendPoolSize = 1000;
     static long limit = 5000;
-    static byte[] li = new byte[0];
+    static final byte[] li = new byte[0];
 
     static {
         PropertyConfigurator.configure("log4j.properties");
@@ -88,16 +89,9 @@ public class TransmitThread implements Runnable {
             if (!dataPool.isEmpty()) {
                 try {
                     dataSplitAndSent();
-                } catch (InterruptedException ex) {
+                } catch (Exception ex) {
                     logger.error(ex, ex);
                     return;
-                } catch (IOException ex) {
-                    logger.info(System.currentTimeMillis() + "split the data from the topic " + topic + " in the dataPool wrong " + ex, ex);
-                    try {
-                        Thread.sleep(2000);
-                    } catch (InterruptedException ex1) {
-                        logger.error(ex1, ex1);
-                    }
                 }
             } else {
                 logger.debug("dataPool for the topic " + topic + " is empty !");
@@ -110,13 +104,23 @@ public class TransmitThread implements Runnable {
         }
     }
 
-    public void dataSplitAndSent() throws InterruptedException, IOException {
+    /**
+     *
+     * Split and send the message to the transfer station
+     */
+    public void dataSplitAndSent() throws InterruptedException, Exception {
         logger.info("begining the dataSplit and send the message from " + topic + " to the transfer station ");
         byte[] data = null;
         while ((data = (byte[]) dataPool.poll(1000, TimeUnit.MILLISECONDS)) != null) {
             docsin = new ByteArrayInputStream(data);
             docsdecoder = DecoderFactory.get().binaryDecoder(docsin, null);
-            docsGr = docsreader.read(null, docsdecoder);
+            try {
+                docsGr = docsreader.read(null, docsdecoder);
+            } catch (IOException ex) {
+                logger.info((new Date()) + " split the data package from the topic " + topic + " in the dataPool wrong " + ex, ex);
+                storeUselessData(topic, data);
+                continue;
+            }
             msgSet = (GenericData.Array<GenericRecord>) docsGr.get(GlobalVariables.DOC_SET);
             msgitor = msgSet.iterator();
             sendRows = MessageTransferStation.getMessageTransferStation();
@@ -124,22 +128,20 @@ public class TransmitThread implements Runnable {
             msgSchema = protocolMsg.getType(msgSchemaName);
             msgreader = new GenericDatumReader<GenericRecord>(msgSchema);
 
-            synchronized (li) {
-                Date dm = new Date();
-                ConcurrentHashMap<String, AtomicLong[]> topicToAcceptCount = (ConcurrentHashMap<String, AtomicLong[]>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_ACCEPTCOUNT);
-                AtomicLong[] al = topicToAcceptCount.get(topic);
-                long ac = al[0].addAndGet(msgSet.size());
-                if (ac >= al[1].longValue()) {
-                    logger.info(dm + " " + ac + " accept messages from " + topic + " successfully");
-                    al[1].addAndGet(limit);
-                }
-            }
+            addCount(); // print the accept count 
 
             while (msgitor.hasNext()) {
                 byte[] onedata = ((ByteBuffer) msgitor.next()).array();
                 ByteArrayInputStream msgbis = new ByteArrayInputStream(onedata);
                 BinaryDecoder msgbd = new DecoderFactory().binaryDecoder(msgbis, null);
-                GenericRecord dxxRecord = msgreader.read(null, msgbd);
+                GenericRecord dxxRecord;
+                try {
+                    dxxRecord = msgreader.read(null, msgbd);
+                } catch (IOException ex) {
+                    logger.info((new Date()) + " split the one data from the topic " + topic + " in the dataPool wrong " + ex, ex);
+                    storeUselessData(topic, onedata);
+                    continue;
+                }
                 for (Rule rule : ruleSet) {
                     while (true) {
                         String flag = null;
@@ -156,8 +158,7 @@ public class TransmitThread implements Runnable {
                                         abq.put(onedata);
                                         break;
                                     } else {
-                                        logger.error("there is no this node in " + topic + " " + rule.getServiceName());
-                                        return;
+                                        throw new Exception("there is no this node in " + topic + " " + rule.getServiceName());
                                     }
                                 } else {
                                     //logger.info("there is no accept node for the service " + rule.getServiceName());
@@ -178,13 +179,13 @@ public class TransmitThread implements Runnable {
                                 NodeLocator n1 = rule.getNodelocator();
                                 if (n1.getNodesNum() > 0) {
                                     RNode node = n1.getPrimary(sb.toString());
+                                    //System.out.println(topic + " " + sb +" " + node.getName());
                                     if (sendRows.containsKey(node)) {
                                         ArrayBlockingQueue abq = (ArrayBlockingQueue) sendRows.get(node);
                                         abq.put(onedata);
                                         break;
                                     } else {
-                                        logger.error("there is no this node in " + topic + " " + rule.getServiceName());
-                                        return;
+                                        throw new Exception("there is no this node in " + topic + " " + rule.getServiceName());
                                     }
                                 } else {
                                     //logger.info("there is no accept node for the service " + rule.getServiceName());
@@ -204,8 +205,7 @@ public class TransmitThread implements Runnable {
                                             abq.put(onedata);
                                             break;
                                         } else {
-                                            logger.error("there is no this node in " + topic + " " + rule.getServiceName());
-                                            return;
+                                            throw new Exception("there is no this node in " + topic + " " + rule.getServiceName());
                                         }
                                     } else {
                                         //logger.info("there is no accept node for the service " + rule.getServiceName());
@@ -235,8 +235,7 @@ public class TransmitThread implements Runnable {
                                             abq.put(onedata);
                                             break;
                                         } else {
-                                            logger.error("there is no this node in " + topic + " " + rule.getServiceName());
-                                            return;
+                                            throw new Exception("there is no this node in " + topic + " " + rule.getServiceName());
                                         }
                                     } else {
                                         //logger.info("there is no accept node for the service " + rule.getServiceName());
@@ -246,145 +245,70 @@ public class TransmitThread implements Runnable {
                                 } else {
                                     break;
                                 }
-                            } //                            else if (rule.getType() == 100) {
-                            //                                String[] keywords = (rule.getKeywords()).split("\\;");
-                            //                                StringBuilder sb = new StringBuilder();
-                            //                                for (String s : keywords) {
-                            //                                    if (dxxRecord.get(s) == null) {
-                            //                                        sb.append("");
-                            //                                    } else {
-                            //                                        sb.append((dxxRecord.get(s)).toString());
-                            //                                    }
-                            //                                }
-                            //
-                            //                                NodeLocator n4 = rule.getNodelocator();
-                            //                                if (!(rule.getNodeToIP().isEmpty())) {
-                            //                                    RNode node = n4.getPrimary(sb.toString());
-                            //                                    if (sendRows.containsKey(node)) {
-                            //                                        ArrayBlockingQueue abq = (ArrayBlockingQueue) sendRows.get(node);
-                            //                                        abq.put(onedata);
-                            //                                        break;
-                            //                                    } else {
-                            //                                        logger.error("there is no this node in " + topic + " " + rule.getServiceName());
-                            //                                        return;
-                            //                                    }
-                            //                                } else {
-                            //                                    //logger.info("there is no accept node for the service " + rule.getServiceName());
-                            //                                    storeStrandedData(rule, onedata);
-                            //                                    break;
-                            //                                }
-                            //                            } 
-                            else if (rule.getType() == 4) {
-                                String[] pt = rule.getPartType().split("\\|");
-                                if (pt.length == 4) {
-                                    while (true) {
-                                        String[] keywords = (rule.getKeywords()).split("\\|");
-                                        StringBuilder sb = new StringBuilder();
-                                        for (int i = 1; i < keywords.length; i++) {
-                                            if (dxxRecord.get(keywords[i]) == null) {
-                                                sb.append("");
-                                            } else {
-                                                sb.append((dxxRecord.get(keywords[i])).toString());
-                                            }
-                                        }
-                                        NodeLocator n4 = rule.getNodelocator();
-                                        RNode node = n4.getPrimary(sb.toString());
-                                        if (sendRows.containsKey(node)) {
-
-                                            ConcurrentHashMap<String, ArrayBlockingQueue> chm = (ConcurrentHashMap<String, ArrayBlockingQueue>) sendRows.get(node);
-                                            String keytime = (rule.getKeywords().split("\\|"))[0].toLowerCase();
-                                            String keyinterval = null;
-                                            String st = null;
-                                            String et = null;
-
-                                            try {
-                                                Long time = (Long) dxxRecord.get(keytime);
-                                                Date dtime = new Date();
-                                                dtime.setTime(time * 1000);
-                                                String unit = (rule.getPartType().split("\\|"))[1];
-                                                String interval = (rule.getPartType().split("\\|"))[2];
-                                                int hour = dtime.getHours();
-                                                int minute = dtime.getMinutes();
-                                                int second = dtime.getSeconds();
-                                                int date = dtime.getDate();
-
-                                                if ("'MI'".equalsIgnoreCase(unit)) {   //以分钟为单位
-                                                    dtime.setSeconds(0);
-                                                    dtime.setMinutes(dtime.getMinutes() - (dtime.getMinutes() % Integer.parseInt(interval)));
-                                                    st = dateFormat.format(dtime);
-                                                    int zt = dtime.getMinutes() + Integer.parseInt(interval);
-                                                    if (zt >= 60) {
-                                                        zt = 60;
-                                                    }
-                                                    dtime.setMinutes(zt);
-                                                    et = dateFormat.format(dtime);
-                                                    keyinterval = st + "|" + et;
-                                                } else if ("'H'".equalsIgnoreCase(unit)) {    //以小时为单位
-                                                    dtime.setSeconds(0);
-                                                    dtime.setMinutes(0);
-                                                    dtime.setHours(dtime.getHours() - (dtime.getHours() % Integer.parseInt(interval)));
-                                                    st = dateFormat.format(dtime);
-                                                    int zt = dtime.getHours() + Integer.parseInt(interval);
-                                                    if (zt >= 24) {
-                                                        zt = 24;
-                                                    }
-                                                    dtime.setHours(zt);
-                                                    et = dateFormat.format(dtime);
-                                                    keyinterval = st + "|" + et;
-                                                } else if ("'D'".equalsIgnoreCase(unit)) { //以天为单位
-                                                    dtime.setSeconds(0);
-                                                    dtime.setMinutes(0);
-                                                    dtime.setHours(0);
-                                                    dtime.setDate(dtime.getDate() - (dtime.getDate() % Integer.parseInt(interval)));
-                                                    st = dateFormat.format(dtime);
-                                                    dtime.setDate(dtime.getDate() + Integer.parseInt(interval));
-                                                    et = dateFormat.format(dtime);
-                                                    keyinterval = st + "|" + et;
-                                                } else {
-                                                    logger.error("now the partition unit is not support, it only supports --- D day,H hour,MI minute");
-                                                    return;
-                                                }
-                                            } catch (Exception e) {
-                                                storeUnvalidData(rule, onedata);
-                                                break;
-                                            }
-                                            if (true) {
-                                                if (chm.containsKey(keyinterval)) {
-                                                    ArrayBlockingQueue abq = (ArrayBlockingQueue) chm.get(keyinterval);
-                                                    abq.put(onedata);
-                                                } else {
-                                                    synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
-                                                        if (!chm.containsKey(keyinterval)) {
-                                                            ArrayBlockingQueue abq = new ArrayBlockingQueue(2 * sendPoolSize);
-                                                            chm.put(keyinterval, abq);
-                                                            logger.debug("the ConcurrentHashMap for " + node.getName() + " for the keyinterval " + keyinterval + " is created");
-                                                            abq.put(onedata);
-                                                            ThreadGroup sendThreadPool = ((Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL)).get(topic);
-                                                            DataSenderThread dst = new DataSenderThread(abq, sendPoolSize, node, rule.getTopic(), rule.getServiceName(), sendThreadPool, rule, keyinterval);
-                                                            Thread tdst = new Thread(dst);
-                                                            tdst.start();
-                                                        } else {
-                                                            ArrayBlockingQueue abq = (ArrayBlockingQueue) chm.get(keyinterval);
-                                                            abq.put(onedata);
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                            }
-                                            break;
+                            } else if (rule.getType() == 4) {
+                                while (true) {
+                                    String[] keywords = (rule.getKeywords()).split("\\|");
+                                    StringBuilder sb = new StringBuilder();
+                                    for (int i = 1; i < keywords.length; i++) {
+                                        if (dxxRecord.get(keywords[i]) == null) {
+                                            sb.append("");
                                         } else {
-                                            logger.error("there is no this node in " + topic + " " + rule.getServiceName());
-                                            return;
+                                            sb.append((dxxRecord.get(keywords[i])).toString());
                                         }
                                     }
-                                } else {
-                                    logger.error("partitioninfo is wrong!!!");
-                                    return;
+                                    NodeLocator n4 = rule.getNodelocator();
+                                    RNode node = n4.getPrimary(sb.toString());
+                                    if (sendRows.containsKey(node)) {
+                                        ConcurrentHashMap<String, ArrayBlockingQueue> chm = (ConcurrentHashMap<String, ArrayBlockingQueue>) sendRows.get(node);
+                                        String keyinterval = null;
+                                        String keytime = (rule.getKeywords().split("\\|"))[0].toLowerCase();
+                                        try {
+                                            Long time = (Long) dxxRecord.get(keytime);
+                                            String unit = (rule.getPartType().split("\\|"))[3];
+                                            String interval = (rule.getPartType().split("\\|"))[4];
+                                            keyinterval = getKeyInterval(time, unit, interval);
+                                        } catch (Exception e) {
+                                            storeUnvalidData(rule, onedata);
+                                            break;
+                                        }
+
+                                        boolean vb = false;
+                                        try {
+                                            vb = isValid(keyinterval);
+                                        } catch (Exception ex) {
+                                            logger.error(ex, ex);
+                                        }
+
+                                        if (vb) {
+                                            synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
+                                                if (!chm.containsKey(keyinterval)) {
+                                                    Long version = 0L;
+                                                    String[] pa = rule.getPartType().split("\\|");
+                                                    version = Long.parseLong(pa[pa.length - 1]);
+                                                    ArrayBlockingQueue abq = new ArrayBlockingQueue(2 * sendPoolSize);
+                                                    chm.put(keyinterval, abq);
+                                                    logger.debug("the ConcurrentHashMap for " + node.getName() + " for the keyinterval " + keyinterval + " is created");
+                                                    abq.put(onedata);
+                                                    ThreadGroup sendThreadPool = ((Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL)).get(topic);
+                                                    DataSenderThread dst = new DataSenderThread(abq, sendPoolSize, node, rule.getTopic(), rule.getServiceName(), sendThreadPool, rule, keyinterval, version);
+                                                    Thread tdst = new Thread(dst);
+                                                    tdst.start();
+                                                } else {
+                                                    ArrayBlockingQueue abq = (ArrayBlockingQueue) chm.get(keyinterval);
+                                                    abq.put(onedata);
+                                                }
+                                            }
+                                        } else {
+                                            storeUnvalidData(rule, onedata);
+                                        }
+                                        break;
+                                    } else {
+                                        throw new Exception("there is no this node in " + topic + " " + rule.getServiceName());
+                                    }
                                 }
                                 break;
                             } else {
-                                logger.error("the rule is wrong");
-                                return;
+                                throw new Exception("the rule is wrong");
                             }
                         } else {
                             logger.info("waitting for the updateNodeThread in " + topic);
@@ -400,6 +324,10 @@ public class TransmitThread implements Runnable {
         }
     }
 
+    /**
+     *
+     * generate the random string
+     */
     public String generateString(int length) {
         StringBuilder sb = new StringBuilder();
         Random random = new Random();
@@ -409,6 +337,11 @@ public class TransmitThread implements Runnable {
         return sb.toString();
     }
 
+    /**
+     *
+     * judge the string is valid or not , return the true if is valid , or
+     * return false
+     */
     private boolean isTrue(String s, GenericRecord dxxRecord) {
 
         if ((!s.contains("|")) && (!s.contains("&"))) {
@@ -473,48 +406,156 @@ public class TransmitThread implements Runnable {
         }
     }
 
-    private void storeUnvalidData(Rule rule, byte[] onedata) {
-        ConcurrentHashMap<Rule, ArrayBlockingQueue> unvalidDataStore = (ConcurrentHashMap<Rule, ArrayBlockingQueue>) RuntimeEnv.getParam(GlobalVariables.UNVALID_DATA_STORE);
-        if (unvalidDataStore.containsKey(rule)) {
-            ArrayBlockingQueue sdQueue = unvalidDataStore.get(rule);
-            try {
-                sdQueue.put(onedata);
-            } catch (InterruptedException ex) {
-                logger.error(ex, ex);
-            }
-        } else {
-            synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_UNVALIDDATA)) {
-                if (unvalidDataStore.containsKey(rule)) {
-                    ArrayBlockingQueue sdQueue = unvalidDataStore.get(rule);
-                    try {
-                        sdQueue.put(onedata);
-                    } catch (InterruptedException ex) {
-                        logger.error(ex, ex);
-                    }
-                } else {
-                    ArrayBlockingQueue sdQueue = new ArrayBlockingQueue(5000);
-                    unvalidDataStore.put(rule, sdQueue);
-                    StoreUnvalidDataThread sudt = new StoreUnvalidDataThread(sdQueue, rule);
-                    Thread tsudt = new Thread(sudt);
-                    tsudt.start();
-                    try {
-                        sdQueue.put(onedata);
-                    } catch (InterruptedException ex) {
-                        logger.error(ex, ex);
-                    }
+    /**
+     *
+     * place the useless data to the uselessDataStore
+     */
+    private void storeUselessData(String topic, byte[] onedata) {
+        ConcurrentHashMap<String, ArrayBlockingQueue> uselessDataStore = (ConcurrentHashMap<String, ArrayBlockingQueue>) RuntimeEnv.getParam(GlobalVariables.USELESS_DATA_STORE);
+        synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_USELESSDATA)) {
+            if (uselessDataStore.containsKey(topic)) {
+                ArrayBlockingQueue sdQueue = uselessDataStore.get(topic);
+                try {
+                    sdQueue.put(onedata);
+                } catch (InterruptedException ex) {
+                    logger.error(ex, ex);
+                }
+            } else {
+                ArrayBlockingQueue sdQueue = new ArrayBlockingQueue(5000);
+                uselessDataStore.put(topic, sdQueue);
+                StoreUselessDataThread sudt = new StoreUselessDataThread(sdQueue, topic);
+                Thread tsudt = new Thread(sudt);
+                tsudt.start();
+                try {
+                    sdQueue.put(onedata);
+                } catch (InterruptedException ex) {
+                    logger.error(ex, ex);
                 }
             }
         }
     }
 
-    public Boolean isValid(Long time) {
-        Date dtime = new Date();
-        dtime.setTime(time * 1000);
-        int hour = dtime.getHours();
-        int minute = dtime.getMinutes();
-        int second = dtime.getSeconds();
-        int date = dtime.getDate();
+    /**
+     *
+     * place the unvalid data to the unvalidDataStore
+     */
+    private void storeUnvalidData(Rule rule, byte[] onedata) {
+        ConcurrentHashMap<Rule, ArrayBlockingQueue> UnvalidDataStore = (ConcurrentHashMap<Rule, ArrayBlockingQueue>) RuntimeEnv.getParam(GlobalVariables.UNVALID_DATA_STORE);
+        synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_UNVALIDDATA)) {
+            if (UnvalidDataStore.containsKey(rule)) {
+                ArrayBlockingQueue sdQueue = UnvalidDataStore.get(rule);
+                try {
+                    sdQueue.put(onedata);
+                } catch (InterruptedException ex) {
+                    logger.error(ex, ex);
+                }
+            } else {
+                ArrayBlockingQueue sdQueue = new ArrayBlockingQueue(5000);
+                UnvalidDataStore.put(rule, sdQueue);
+                StoreUnvalidDataStoreDataThread sotdsdt = new StoreUnvalidDataStoreDataThread(sdQueue, rule);
+                Thread tsotdsdt = new Thread(sotdsdt);
+                tsotdsdt.start();
+                try {
+                    sdQueue.put(onedata);
+                } catch (InterruptedException ex) {
+                    logger.error(ex, ex);
+                }
+            }
+        }
+    }
+
+    /**
+     *
+     * test the keyinterval is valid or not
+     */
+    public Boolean isValid(String keyinterval) throws ParseException {
+        if (keyinterval == null) {
+            return false;
+        }
+
+        String st = keyinterval.split("\\|")[0];
+        String et = keyinterval.split("\\|")[1];
+        Date stime = dateFormat.parse(st);
+        Date etime = dateFormat.parse(et);
+        Date nowtime = new Date();
+
+        nowtime.setMonth(stime.getMonth() - 1);
+        if (nowtime.after(stime)) {
+            return false;
+        }
+        nowtime = new Date();
+        nowtime.setDate(etime.getDate() + 7);
+        if (nowtime.before(etime)) {
+            return false;
+        }
 
         return true;
+    }
+
+    /**
+     *
+     * Split and send the message to the transfer station
+     */
+    private void addCount() {
+        synchronized (li) {
+            Date dm = new Date();
+            ConcurrentHashMap<String, AtomicLong[]> topicToAcceptCount = (ConcurrentHashMap<String, AtomicLong[]>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_ACCEPTCOUNT);
+            AtomicLong[] al = topicToAcceptCount.get(topic);
+            long ac = al[0].addAndGet(msgSet.size());
+            if (ac >= al[1].longValue()) {
+                logger.info(dm + " " + ac + " accept messages from " + topic + " successfully");
+                al[1].addAndGet(limit);
+            }
+        }
+    }
+
+    /**
+     *
+     * get the keyinterval by time ,unit and interval
+     */
+    private String getKeyInterval(Long time, String unit, String interval) {
+        String st = null;
+        String et = null;
+
+        Date dtime = new Date();
+        dtime.setTime(time * 1000);
+        String keyinterval = null;
+
+        if ("'MI'".equalsIgnoreCase(unit)) {   //以分钟为单位
+            dtime.setSeconds(0);
+            dtime.setMinutes(dtime.getMinutes() - (dtime.getMinutes() % Integer.parseInt(interval)));
+            st = dateFormat.format(dtime);
+            int zt = dtime.getMinutes() + Integer.parseInt(interval);
+            if (zt >= 60) {
+                zt = 60;
+            }
+            dtime.setMinutes(zt);
+            et = dateFormat.format(dtime);
+            keyinterval = st + "|" + et;
+        } else if ("'H'".equalsIgnoreCase(unit)) {    //以小时为单位
+            dtime.setSeconds(0);
+            dtime.setMinutes(0);
+            dtime.setHours(dtime.getHours() - (dtime.getHours() % Integer.parseInt(interval)));
+            st = dateFormat.format(dtime);
+            int zt = dtime.getHours() + Integer.parseInt(interval);
+            if (zt >= 24) {
+                zt = 24;
+            }
+            dtime.setHours(zt);
+            et = dateFormat.format(dtime);
+            keyinterval = st + "|" + et;
+        } else if ("'D'".equalsIgnoreCase(unit)) { //以天为单位
+            dtime.setSeconds(0);
+            dtime.setMinutes(0);
+            dtime.setHours(0);
+            dtime.setDate(dtime.getDate() - (dtime.getDate() % Integer.parseInt(interval)));
+            st = dateFormat.format(dtime);
+            dtime.setDate(dtime.getDate() + Integer.parseInt(interval));
+            et = dateFormat.format(dtime);
+            keyinterval = st + "|" + et;
+        } else {
+            logger.error("now the partition unit is not support, it only supports --- D day,H hour,MI minute");
+        }
+        return keyinterval;
     }
 }

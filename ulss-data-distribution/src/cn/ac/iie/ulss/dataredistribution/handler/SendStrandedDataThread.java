@@ -49,6 +49,7 @@ public class SendStrandedDataThread implements Runnable {
                     Long f_id = (Long) o[3];
                     String road = (String) o[4];
                     int count = (Integer)o[5];
+                    Long version = (Long)o[6];
                     Set<Rule> sr = m.keySet();
                     for (Rule r : sr) {
                         while (sendThreadPool.activeCount() >= poolsize) {
@@ -59,7 +60,7 @@ public class SendStrandedDataThread implements Runnable {
                                 logger.error(ex, ex);
                             }
                         }
-                        SendToServiceThread sst = new SendToServiceThread(m.get(r), node, r.getTopic(), r.getServiceName(), r, sendIP, keyinterval, f_id, road , count);
+                        SendToServiceThread sst = new SendToServiceThread(m.get(r), node, r.getTopic(), r.getServiceName(), r, sendIP, keyinterval, f_id, road , count , version);
                         Thread tsst = new Thread(sendThreadPool, sst);
                         tsst.start();
                         try {

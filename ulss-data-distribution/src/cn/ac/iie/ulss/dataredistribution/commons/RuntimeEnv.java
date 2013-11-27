@@ -28,6 +28,8 @@ public class RuntimeEnv {
     public static final String METASTORE_CLIENT_STRING = "metaStoreClientString";
     public static final String DATA_DIR = "dataDir";
     public static final String METASTORE_CLIENT_POOL_SIZE = "metaStoreClientPoolSize";
+    public static final String METASTORE_ZK_CLUSTER = "metaStoreZkCluster";
+    public static final String REGION = "region";
     private static Map<String, Object> dynamicParams = new HashMap<String, Object>();
     private static Configuration conf = null;
     static Logger logger = null;
@@ -156,6 +158,20 @@ public class RuntimeEnv {
             return false;
         }
         dynamicParams.put(METASTORE_CLIENT_POOL_SIZE, metaStoreClientPoolSize);
+        
+        String metaStoreZkCluster = conf.getString("metaStoreZkCluster", "");
+        if (metaStoreZkCluster.isEmpty() || metaStoreZkCluster == "") {
+            logger.error("parameter metaStoreZkCluster does not exist or is not defined");
+            return false;
+        }
+        dynamicParams.put(METASTORE_ZK_CLUSTER, metaStoreZkCluster);
+        
+        String region = conf.getString("region", "");
+        if (metaStoreZkCluster.isEmpty() || metaStoreZkCluster == "") {
+            logger.error("parameter region does not exist or is not defined");
+            return false;
+        }
+        dynamicParams.put(REGION, region);
 
         return true;
     }

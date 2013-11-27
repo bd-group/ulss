@@ -79,7 +79,7 @@ public class DetectNodeThread implements Runnable {
                         httppost.releaseConnection();
                         try {
                             Thread.sleep(5000);
-                        } catch (InterruptedException ex1) {
+                        } catch (Exception ex1) {
                             logger.error(ex1);
                         }
                         continue;
@@ -93,7 +93,7 @@ public class DetectNodeThread implements Runnable {
                     httppost.releaseConnection();
                     try {
                         Thread.sleep(5000);
-                    } catch (InterruptedException ex1) {
+                    } catch (Exception ex1) {
                         logger.error(ex1);
                     }
                     continue;

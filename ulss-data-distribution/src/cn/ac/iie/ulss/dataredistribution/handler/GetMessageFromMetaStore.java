@@ -26,7 +26,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -44,19 +43,22 @@ import org.apache.log4j.PropertyConfigurator;
  * @author evan
  */
 public class GetMessageFromMetaStore implements Runnable {
-
+    
     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     static Logger logger = null;
     int attempSize = 2;
-
+    
     static {
         PropertyConfigurator.configure("log4j.properties");
-        logger = Logger.getLogger(GetRuleFromDBThread.class.getName());
+        logger = Logger.getLogger(GetRuleFromDB.class.getName());
     }
-
+    
     @Override
     public void run() {
-        String zkUrl = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
+        logger.info("getting the message from the metastore");
+        String mszkurl = (String) RuntimeEnv.getParam(RuntimeEnv.METASTORE_ZK_CLUSTER);
+        String zkUrl = mszkurl.split("\\|")[0];
+        String topic = mszkurl.split("\\|")[1];
         MetaClientConfig metaClientConfig = new MetaClientConfig();
         final ZkUtils.ZKConfig zkConfig = new ZkUtils.ZKConfig();
         zkConfig.zkConnect = zkUrl;
@@ -64,14 +66,14 @@ public class GetMessageFromMetaStore implements Runnable {
         final MessageSessionFactory sessionFactory;
         try {
             sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
-
+            
             ConsumerConfig cc = new ConsumerConfig("dateredistribution_consumer");
-
+            
             final MessageConsumer consumer = sessionFactory.createConsumer(cc);
-
+            
             logger.info("init the consumer ok,begin receive data from the metastore ");
-
-            consumer.subscribe("meta-test", 1024 * 1024, new MessageListener() {
+            
+            consumer.subscribe(topic, 1024 * 1024, new MessageListener() {
                 @Override
                 public void recieveMessages(Message message) {
                     DDLMsg msg = new DDLMsg();
@@ -80,164 +82,104 @@ public class GetMessageFromMetaStore implements Runnable {
                     int eventId = (int) msg.getEvent_id();
                     String db_name = null;
                     String table_name = null;
-                    Map<String, String> TBNameToTopic = null;
-                    String topic = null;
-                    String metaStoreClient = null;
-                    String[] m = null;
-                    Table bf_dxx = null;
+                    String column_name = null;
+                    String column_type = null;
+                    Long version = -1L;
+                    
                     Map<String, Object> topicToRules = (Map<String, Object>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_RULES);
                     switch (eventId) {
-                        case 1105:
-                            logger.info("the transmitRule is change!!!");
-                            for (int i = 0; i < 5; i++) {
-                                System.out.println(0);
-                            }
+                        case 1101: // 新建表
+                            logger.info("the message from metastore for 1101!!!");
                             db_name = (String) msg.getMsg_data().get("db_name");
                             table_name = (String) msg.getMsg_data().get("table_name");
-                            Long version = (Long) msg.getMsg_data().get("version");
-                            System.out.println( db_name + " " +  table_name + " " +  version );
-//                            TBNameToTopic = (Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TBNAME_TO_TOPIC);
-//                            topic = TBNameToTopic.get(table_name);
-//                            metaStoreClient = (String) RuntimeEnv.getParam(RuntimeEnv.METASTORE_CLIENT_STRING);
-//                            m = metaStoreClient.split("\\:");
-//
-//                            MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
-//                            MetaStoreClient cli = mscp.getClient();
-//                            int attemp = 0;
-//                            String split_name_l1 = ""; //String split_name_l1 =  pis.get(0).getP_col()??getP_type().getName();
-//                            String split_name_l2 = "";
-//                            String part_type_l1 = "";
-//                            String part_type_l2 = "";
-//                            int l1_part_num = 0;
-//                            int l2_part_num = 0;
-//                            String partType = null;
-//                            String keywords = null;
-//                            try {
-//                                IMetaStoreClient icli = cli.getHiveClient();
-//                                attemp = 0;
-//                                while (attemp <= attempSize) {
-//                                    try {
-//                                        bf_dxx = icli.getTable(m[2], table_name);
-//
-//                                        List<FieldSchema> allsplitKeys = bf_dxx.getFileSplitKeys();
-//
-//                                        List<FieldSchema> splitKeys = new ArrayList<FieldSchema>();
-//
-//                                        for (FieldSchema sf : allsplitKeys) {
-//                                            if (sf.getVersion() == version) {
-//                                                splitKeys.add(sf);
-//                                            }
-//                                        }
-//
-//                                        if (splitKeys.isEmpty()) {
-//                                            logger.info("can not get the fieldSchema for " + db_name + " " + table_name + " " + version);
-//                                            break;
-//                                        }
-//
-//                                        List<PartitionFactory.PartitionInfo> pis = PartitionFactory.PartitionInfo.getPartitionInfo(splitKeys);
-//
-//                                        if (pis.size() == 2) {
-//                                            StringBuilder tmps = new StringBuilder();
-//                                            String unit = null;
-//                                            String interval = null;
-//                                            for (PartitionFactory.PartitionInfo pinfo : pis) {
-//                                                if (pinfo.getP_level() == 1) {         //分区是第几级？一级还是二级(现在支持一级interval、hash和一级interv、二级hash 三种分区方式)
-//                                                    split_name_l1 = pinfo.getP_col();  //使用哪一列进行分区
-//                                                    part_type_l1 = pinfo.getP_type().getName(); //这级分区的方式，是hash还是interval ?
-//                                                    l1_part_num = pinfo.getP_num();   //分区有多少个，如果是hash的话n个分区，那么特征值就是0,1,2 。。。 n-1
-//
-//                                                    if ("interval".equalsIgnoreCase(part_type_l1)) {
-//                                                        if (pis.get(0).getArgs().size() < 2) {
-//                                                            throw new RuntimeException("get the table's partition unit and interval error");
-//                                                        } else {
-//                                                            //Y year,M mponth,W week,D day,H hour，M minute。 现在只支持H D W， 因为月和年的时间并不是完全确定的，因此无法进行精确的分区，暂时不支持；分钟级的单位太小，暂时也不支持
-//                                                            List<String> paras = pinfo.getArgs();
-//                                                            unit = paras.get(0);
-//                                                            interval = paras.get(1);
-//                                                            tmps.append("interval:");
-//                                                            tmps.append(unit);
-//                                                            tmps.append(":");
-//                                                            tmps.append(interval);
-//                                                        }
-//                                                    } else {
-//                                                        logger.error("this system only support the interval for the first partition");
-//                                                    }
-//                                                }
-//
-//                                                if (pinfo.getP_level() == 2) {
-//                                                    split_name_l2 = pinfo.getP_col();
-//                                                    part_type_l2 = pinfo.getP_type().getName();
-//                                                    l2_part_num = pinfo.getP_num();
-//                                                    //keywords = part_type_l2;
-//
-//                                                    if ("hash".equalsIgnoreCase(part_type_l2)) {
-//                                                        tmps.append(":hash");
-//                                                        partType = tmps.toString();
-//                                                    }
-//                                                } else {
-//                                                    logger.error("this system only support the hash for the second partition");
-//                                                }
-//                                            }
-//                                            keywords = split_name_l1 + "|" + split_name_l2;
-//
-//                                        } else {
-//                                            logger.error("this system only support the two levelpartitions");
-//                                        }
-//                                        break;
-//                                    } catch (Exception ex) {
-//                                        logger.error(ex, ex);
-//                                        try {
-//                                            icli.reconnect();
-//                                        } catch (MetaException ex1) {
-//                                            logger.error(ex1, ex1);
-//                                        }
-//                                        attemp++;
-//                                    }
-//                                }
-//                            } finally {
-//                                cli.release();
-//                            }
-//
-//                            if (keywords != null) {
-//                                Set<Rule> rules = (Set<Rule>) topicToRules.get(topic);
-//                                for (Rule r : rules) {
-//                                    if (r.getType() == 4) {
-//                                        ArrayList<RNode> oldnurl = r.getNodeUrls();
-//                                        Map<RNode, Rule> nodeToRule = (Map<RNode, Rule>) RuntimeEnv.getParam(GlobalVariables.NODE_TO_RULE);
-//                                        Map<RNode, Object> messageTransferStation = MessageTransferStation.getMessageTransferStation();
-//                                        ArrayList<RNode> nurl = new ArrayList<RNode>();
-//                                        for (int i = 0; i < l2_part_num; i++) {
-//                                            RNode node = new RNode("" + i);
-//                                            nurl.add(node);
-//                                            nodeToRule.put(node, r);
-//                                            if (!messageTransferStation.containsKey(node)) {
-//                                                ConcurrentHashMap<String, ArrayBlockingQueue> chm = new ConcurrentHashMap<String, ArrayBlockingQueue>();
-//                                                messageTransferStation.put(node, chm);
-//                                            }
-//                                        }
-//                                        DynamicAllocate dynamicallocate = new DynamicAllocate();
-//                                        dynamicallocate.setNodes(nurl);
-//                                        MD5NodeLocator nodelocator = dynamicallocate.getMD5NodeLocator();
-//
-//                                        r.changerule(nurl, nodelocator, keywords, partType);
-//                                        logger.info("change the partitioninfo for " + r.getTopic() + " " + r.getServiceName() + " to " + partType + " " + keywords);
-//
-//                                        for (RNode n : oldnurl) {
-//                                            if (!messageTransferStation.containsKey(n)) {
-//                                                messageTransferStation.remove(n);
-//                                            }
-//                                        }
-//
-//                                        RemoveNodeFromMessageTransferStation rnfmts = new RemoveNodeFromMessageTransferStation(nurl);
-//                                        Thread t = new Thread(rnfmts);
-//                                        t.start();
-//                                    }
-//                                }
-//                            }
-
                             break;
-
-//                        case 1307:
+                        
+                        case 1102: // 修改表名
+                            logger.info("the message from metastore for 1102!!!");
+                            db_name = (String) msg.getMsg_data().get("db_name");
+                            table_name = (String) msg.getMsg_data().get("table_name");
+                            String old_table_name = (String) msg.getMsg_data().get("old_table_name");
+                            break;
+                        
+                        case 1105: // 划分规则改变
+                            logger.info("the message from metastore for 1105!!! , begin to change the transmit rule");
+                            db_name = (String) msg.getMsg_data().get("db_name");
+                            table_name = (String) msg.getMsg_data().get("table_name");
+                            version = Long.parseLong((String) msg.getMsg_data().get("version"));
+                            
+                            Object[] o = getChangedRule(db_name, table_name, version);
+                            String keywords = (String) o[0];
+                            String partType = (String) o[1];
+                            int hashNum = 0;
+                            try {
+                                hashNum = (Integer) o[2];
+                            } catch (Exception ex) {
+                                logger.error(ex, ex);
+                            }
+                            String topic = (String) o[3];
+                            if (keywords != null && partType != null && hashNum != 0 && topic != null) {
+                                ArrayList<Rule> rules = (ArrayList<Rule>) topicToRules.get(topic);
+                                for (Rule r : rules) {
+                                    ArrayList<RNode> oldnurl = r.getNodeUrls();
+                                    Map<RNode, Rule> nodeToRule = (Map<RNode, Rule>) RuntimeEnv.getParam(GlobalVariables.NODE_TO_RULE);
+                                    Map<RNode, Object> messageTransferStation = MessageTransferStation.getMessageTransferStation();
+                                    ArrayList<RNode> nurl = new ArrayList<RNode>();
+                                    for (int i = 0; i < hashNum; i++) {
+                                        RNode node = new RNode("" + i);
+                                        nurl.add(node);
+                                        nodeToRule.put(node, r);
+                                        if (!messageTransferStation.containsKey(node)) {
+                                            ConcurrentHashMap<String, ArrayBlockingQueue> chm = new ConcurrentHashMap<String, ArrayBlockingQueue>();
+                                            messageTransferStation.put(node, chm);
+                                        }
+                                    }
+                                    DynamicAllocate dynamicallocate = new DynamicAllocate();
+                                    dynamicallocate.setNodes(nurl);
+                                    MD5NodeLocator nodelocator = dynamicallocate.getMD5NodeLocator();
+                                    
+                                    r.changerule(nurl, nodelocator, keywords, partType);
+                                    logger.info("change the partitioninfo for " + r.getTopic() + " " + r.getServiceName() + " to " + partType + " " + keywords + " " + hashNum);
+                                    
+                                    RemoveNodeFromMessageTransferStation rnfmts = new RemoveNodeFromMessageTransferStation(r, oldnurl);
+                                    Thread t = new Thread(rnfmts);
+                                    t.start();
+                                }
+                            } else {
+                                logger.error("change the transmit rule for " + db_name + " " + table_name + " " + version + " error!");
+                            }
+                            
+                            break;
+                        
+                        case 1201: // 删除列
+                            logger.info("the message from metastore for 1201!!!");
+                            db_name = (String) msg.getMsg_data().get("db_name");
+                            table_name = (String) msg.getMsg_data().get("table_name");
+                            column_name = (String) msg.getMsg_data().get("column_name");
+                            column_type = (String) msg.getMsg_data().get("column_type");
+                            break;
+                        
+                        case 1202: //新增列
+                            logger.info("the message from metastore for 1202 !!!");
+                            db_name = (String) msg.getMsg_data().get("db_name");
+                            table_name = (String) msg.getMsg_data().get("table_name");
+                            column_name = (String) msg.getMsg_data().get("column_name");
+                            column_type = (String) msg.getMsg_data().get("column_type");
+                            break;
+                        
+                        case 1203: //修改列名
+                            logger.info("the message from metastore for 1203 !!!");
+                            db_name = (String) msg.getMsg_data().get("db_name");
+                            table_name = (String) msg.getMsg_data().get("table_name");
+                            column_name = (String) msg.getMsg_data().get("column_name");
+                            String old_column_name = (String) msg.getMsg_data().get("old_column_name");
+                            break;
+                        case 1207: //删除表
+                            logger.info("the message from metastore for 1207 !!!");
+                            db_name = (String) msg.getMsg_data().get("db_name");
+                            table_name = (String) msg.getMsg_data().get("table_name");
+                            break;
+//                        case 1307: //文件状态改变
+//                            logger.info("the transmitRule is change for 1307 !!!");
 //                            db_name = (String) msg.getMsg_data().get("db_name");
 //                            table_name = (String) msg.getMsg_data().get("table_name");
 //                            TBNameToTopic = (Map<String, String>) RuntimeEnv.getParam("TBNameToTopic");
@@ -307,21 +249,134 @@ public class GetMessageFromMetaStore implements Runnable {
 //                            }
 //
 //                            break;
-
-
-
                         default:
-                            logger.info("Event is useless");
+                            //logger.info("Event is useless");
                             break;
                     }
                 }
+                
+                public Object[] getChangedRule(String db_name, String table_name, Long version) {
+                    Map<String, String> metaToTopic = (Map<String, String>) RuntimeEnv.getParam(GlobalVariables.META_TO_TOPIC);
+                    String topic = metaToTopic.get(db_name + table_name);
+                    Table bf_dxx = null;
+                    
+                    MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
+                    MetaStoreClient cli = mscp.getClient();
+                    int attemp = 0;
+                    String split_name_l1 = ""; //String split_name_l1 =  pis.get(0).getP_col()??getP_type().getName();
+                    String split_name_l2 = "";
+                    String part_type_l1 = "";
+                    String part_type_l2 = "";
+                    int l1_part_num = 0;
+                    int l2_part_num = 0;
+                    String partType = null;
+                    String keywords = null;
+                    try {
+                        IMetaStoreClient icli = cli.getHiveClient();
+                        attemp = 0;
+                        while (attemp <= attempSize) {
+                            try {
+                                bf_dxx = icli.getTable(db_name, table_name);
+                                
+                                List<FieldSchema> allsplitKeys = bf_dxx.getFileSplitKeys();
+                                
+                                List<FieldSchema> splitKeys = new ArrayList<FieldSchema>();
+                                
+                                for (FieldSchema sf : allsplitKeys) {
+                                    if (sf.getVersion() == version) {
+                                        splitKeys.add(sf);
+                                    }
+                                }
+                                
+                                if (splitKeys.isEmpty()) {
+                                    logger.info("can not get the fieldSchema for " + db_name + " " + table_name + " " + version);
+                                    break;
+                                }
+                                
+                                List<PartitionFactory.PartitionInfo> pis = PartitionFactory.PartitionInfo.getPartitionInfo(splitKeys);
+                                
+                                if (pis.size() == 2) {
+                                    StringBuilder tmps = new StringBuilder();
+                                    tmps.append(db_name);
+                                    tmps.append("|");
+                                    tmps.append(table_name);
+                                    String unit = null;
+                                    String interval = null;
+                                    for (PartitionFactory.PartitionInfo pinfo : pis) {
+                                        if (pinfo.getP_level() == 1) {         //分区是第几级？一级还是二级(现在支持一级interval、hash和一级interv、二级hash 三种分区方式)
+                                            split_name_l1 = pinfo.getP_col();  //使用哪一列进行分区
+                                            part_type_l1 = pinfo.getP_type().getName(); //这级分区的方式，是hash还是interval ?
+                                            l1_part_num = pinfo.getP_num();   //分区有多少个，如果是hash的话n个分区，那么特征值就是0,1,2 。。。 n-1
 
+                                            if ("interval".equalsIgnoreCase(part_type_l1)) {
+                                                if (pinfo.getArgs().size() < 2) {
+                                                    logger.error("get the table's partition unit and interval error");
+                                                    break;
+                                                } else {
+                                                    //Y year,M mponth,W week,D day,H hour，M minute。 现在只支持H D W， 因为月和年的时间并不是完全确定的，因此无法进行精确的分区，暂时不支持；分钟级的单位太小，暂时也不支持
+                                                    List<String> paras = pinfo.getArgs();
+                                                    unit = paras.get(0);
+                                                    interval = paras.get(1);
+                                                    tmps.append("|interval|");
+                                                    tmps.append(unit);
+                                                    tmps.append("|");
+                                                    tmps.append(interval);
+                                                }
+                                            } else {
+                                                logger.error("this system only support the interval for the first partition");
+                                                break;
+                                            }
+                                        }
+                                        
+                                        if (pinfo.getP_level() == 2) {
+                                            split_name_l2 = pinfo.getP_col();
+                                            part_type_l2 = pinfo.getP_type().getName();
+                                            l2_part_num = pinfo.getP_num();
+                                            
+                                            if ("hash".equalsIgnoreCase(part_type_l2)) {
+                                                tmps.append("|hash|");
+                                                tmps.append(version);
+                                                partType = tmps.toString();
+                                            } else {
+                                                logger.error("this system only support the hash for the second partition");
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    keywords = split_name_l1 + "|" + split_name_l2;
+                                } else {
+                                    logger.error("this system only support the two levelpartitions");
+                                    break;
+                                }
+                                break;
+                            } catch (Exception ex) {
+                                logger.error(ex, ex);
+                                try {
+                                    icli.reconnect();
+                                } catch (MetaException ex1) {
+                                    logger.error(ex1, ex1);
+                                }
+                                attemp++;
+                            }
+                        }
+                    } finally {
+                        cli.release();
+                    }
+                    Object[] ob = new Object[4];
+                    ob[0] = keywords;
+                    ob[1] = partType;
+                    ob[2] = l2_part_num;
+                    ob[3] = topic;
+                    logger.info("change the transmit rule for " + db_name + " " + table_name + " " + keywords + " " + partType + " " + l2_part_num + " " + topic);
+                    return ob;
+                }
+                
                 @Override
                 public Executor getExecutor() {
                     return null;
                 }
             });
-
+            
             consumer.completeSubscribe();
         } catch (MetaClientException ex) {
             logger.error(ex, ex);

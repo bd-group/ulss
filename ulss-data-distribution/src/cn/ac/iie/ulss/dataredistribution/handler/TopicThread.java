@@ -90,8 +90,8 @@ public class TopicThread implements Runnable {
             logger.info("pull data for the topic " + topic + " from metaq successfully");
 
             for (int i = 0; i < ((Integer) RuntimeEnv.getParam(RuntimeEnv.WRITE_TO_FILE_THREAD)); i++) {
-                //fileName = "backup/" + topic + i + ".dr";
-                fileName = dataDir + "backup/" + topic + i + ".dr";
+                //fileName = "backup/" + topic + i + ".bk";
+                fileName = dataDir + "backup/" + topic + i + ".bk";
                 fsmit = new File(fileName);
 
                 if (fsmit.exists()) {
@@ -109,6 +109,10 @@ public class TopicThread implements Runnable {
         }
     }
 
+    /**
+     *
+     * accept data from the metaq
+     */
     private void acceptData() {
         bufferPool = new ArrayBlockingQueue(bufferPoolSize);
         String zkUrl = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
@@ -118,6 +122,10 @@ public class TopicThread implements Runnable {
         tda.start();
     }
 
+    /**
+     *
+     * handler the leaving data in the file 
+     */
     private void handlerLeavingData(File f) {
         try {
             BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f)));

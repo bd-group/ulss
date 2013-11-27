@@ -149,10 +149,10 @@ public class MetaStoreClientPool {
 
             // Randomize the retry interval so the meta store isn't flooded with
             // attempts.
-            if (retryInterval < 300000) {
+            if (retryInterval < 30000) {
                 retryInterval = retryInterval + METASTORE_RETRY_INIT;
             } else {
-                retryInterval = 300000;
+                retryInterval = 30000;
             }
 
             logger.info(String.format("On retry attempt %d . Sleeping %d seconds.", ++retryAttempt, retryInterval / 1000));

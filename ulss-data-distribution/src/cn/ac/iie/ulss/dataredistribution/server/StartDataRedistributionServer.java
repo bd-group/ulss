@@ -3,7 +3,7 @@ package cn.ac.iie.ulss.dataredistribution.server;
 import cn.ac.iie.ulss.dataredistribution.commons.GlobalVariables;
 import cn.ac.iie.ulss.dataredistribution.commons.RuntimeEnv;
 import cn.ac.iie.ulss.dataredistribution.config.Configuration;
-import cn.ac.iie.ulss.dataredistribution.handler.GetRuleFromDBThread;
+import cn.ac.iie.ulss.dataredistribution.handler.GetRuleFromDB;
 import cn.ac.iie.ulss.dataredistribution.tools.GetSchemaFromDB;
 import cn.ac.iie.ulss.dataredistribution.tools.GetTBNameFromDB;
 import org.apache.log4j.Logger;
@@ -70,8 +70,7 @@ public class StartDataRedistributionServer {
         logger.info("starting data transmit client...");
         GetSchemaFromDB.getSchemaFromDB();
         GetTBNameFromDB.getTBNameFromDB();
-        GetRuleFromDBThread gr = new GetRuleFromDBThread();
-        Thread tgr = new Thread(gr);
-        tgr.start();
+        GetRuleFromDB gr = new GetRuleFromDB();
+        gr.start();
     }
 }

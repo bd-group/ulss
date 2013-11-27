@@ -43,7 +43,10 @@ public class DataAccepterThread implements Runnable {
         pullDataFromQ();
     }
 
-    //根据表的名字获得对应的消息队列的名字，然后根据消息队列的分区从中拉取数据,然后放入bufferPool中
+    /**
+     *
+     * 根据表的名字获得对应的消息队列的名字，然后根据消息队列的分区从中拉取数据,然后放入bufferPool中
+     */
     public void pullDataFromQ() {
         MetaClientConfig metaClientConfig = new MetaClientConfig();
         final ZkUtils.ZKConfig zkConfig = new ZkUtils.ZKConfig();
@@ -53,7 +56,7 @@ public class DataAccepterThread implements Runnable {
         try {
             sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
 
-            ConsumerConfig cc = new ConsumerConfig("rd" + topic + "_consumer");
+            ConsumerConfig cc = new ConsumerConfig("rd_" + topic + "_consumer");
 
             final MessageConsumer consumer = sessionFactory.createConsumer(cc);
 
@@ -67,6 +70,10 @@ public class DataAccepterThread implements Runnable {
         }
     }
 
+    /**
+     *
+     * the messageListener use control the flow 
+     */
     private class MessageListenerImpl implements MessageListener {
 
         ArrayBlockingQueue bufferPool = null;
@@ -82,7 +89,7 @@ public class DataAccepterThread implements Runnable {
                     logger.debug("the  bufferPool is full,and will sleep ...");
                     try {
                         Thread.sleep(100);
-                    } catch (InterruptedException ex) {
+                    } catch (Exception ex) {
                     }
                 }
             }

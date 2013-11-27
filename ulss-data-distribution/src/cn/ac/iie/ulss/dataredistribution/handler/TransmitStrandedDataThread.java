@@ -13,6 +13,7 @@ import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
@@ -63,16 +64,21 @@ public class TransmitStrandedDataThread implements Runnable {
             } else {
                 Rule r = (Rule) o[0];
                 byte[] sendData = (byte[]) o[1];
-                dataSplitAndSent(r, sendData);
+                try {
+                    dataSplitAndSent(r, sendData);
+                } catch (Exception ex) {
+                    logger.error(ex,ex);
+                    return;
+                }
             }
         }
     }
 
     /**
      *
-     * dataSplit and send the stranded message to the transfer station 
+     * dataSplit and send the stranded message to the transfer station
      */
-    private void dataSplitAndSent(Rule rule, byte[] sendData) {
+    private void dataSplitAndSent(Rule rule, byte[] sendData) throws InterruptedException {
         //logger.info("begining the dataSplit and send the stranded message from " + r.getTopic() + " to the transfer station ");
         String msgSchemaContent = ((Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SCHEMACONTENT)).get(rule.getTopic());
         String docsSchemaContent = (String) RuntimeEnv.getParam(GlobalVariables.DOCS_SCHEMA_CONTENT);
@@ -82,124 +88,135 @@ public class TransmitStrandedDataThread implements Runnable {
         DatumReader<GenericRecord> docsreader = new GenericDatumReader<GenericRecord>(docsSchema);
         ByteArrayInputStream docsin = new ByteArrayInputStream(sendData);
         BinaryDecoder docsdecoder = DecoderFactory.get().binaryDecoder(docsin, null);
-        GenericRecord docsGr;
+
+        GenericRecord docsGr = null;
+
         try {
             docsGr = docsreader.read(null, docsdecoder);
-            GenericArray msgSet = (GenericData.Array<GenericRecord>) docsGr.get(GlobalVariables.DOC_SET);
-            Iterator<ByteBuffer> msgitor = msgSet.iterator();
-            messageTransferStation = MessageTransferStation.getMessageTransferStation();
-            Protocol protocolMsg = Protocol.parse(msgSchemaContent);
-            Schema msgSchema = protocolMsg.getType(msgSchemaName);
-            DatumReader<GenericRecord> msgreader = new GenericDatumReader<GenericRecord>(msgSchema);
-            while (msgitor.hasNext()) {
-                byte[] onedata = ((ByteBuffer) msgitor.next()).array();
-                ByteArrayInputStream msgbis = new ByteArrayInputStream(onedata);
-                BinaryDecoder msgbd = new DecoderFactory().binaryDecoder(msgbis, null);
-                GenericRecord dxxRecord = msgreader.read(null, msgbd);
+        } catch (IOException ex) {
+            logger.info((new Date()) + " split the data package from the topic " + rule.getTopic() + " in the dataPool wrong " + ex, ex);
+            storeUselessData(rule.getTopic(), sendData);
+            return;
+        }
 
-                String flag = null;
-                Map<Rule, String> ruleToControl = (Map<Rule, String>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_CONTROL);
-                flag = ruleToControl.get(rule);
-                if (flag.equals("start")) {
-                    if (rule.getType() == 0) {
-                        NodeLocator n0 = rule.getNodelocator();
-                        String randomstring = generateString(10);
-                        if (n0.getNodesNum() > 0) {
-                            RNode node = n0.getPrimary(randomstring);
-                            if (messageTransferStation.containsKey(node)) {
-                                ArrayBlockingQueue abq = (ArrayBlockingQueue) messageTransferStation.get(node);
-                                abq.put(onedata);
-                            } else {
-                                logger.error("there is no this node in " + rule.getTopic() + " " + rule.getServiceName());
-                                storeStrandedData(rule, onedata);
-                            }
-                        } else {
-                            //logger.info("there is no accept node for the service " + rule.getServiceName());
-                            storeStrandedData(rule, onedata);
-                        }
-                    } else if (rule.getType() == 1) {
-                        String[] keywords = (rule.getKeywords()).split("\\;");
-                        StringBuilder sb = new StringBuilder();
-                        for (String s : keywords) {
-                            if (dxxRecord.get(s) == null) {
-                                sb.append("");
-                            } else {
-                                sb.append((dxxRecord.get(s)).toString());
-                            }
-                        }
+        GenericArray msgSet = (GenericData.Array<GenericRecord>) docsGr.get(GlobalVariables.DOC_SET);
+        Iterator<ByteBuffer> msgitor = msgSet.iterator();
+        messageTransferStation = MessageTransferStation.getMessageTransferStation();
+        Protocol protocolMsg = Protocol.parse(msgSchemaContent);
+        Schema msgSchema = protocolMsg.getType(msgSchemaName);
+        DatumReader<GenericRecord> msgreader = new GenericDatumReader<GenericRecord>(msgSchema);
+        while (msgitor.hasNext()) {
+            byte[] onedata = ((ByteBuffer) msgitor.next()).array();
+            ByteArrayInputStream msgbis = new ByteArrayInputStream(onedata);
+            BinaryDecoder msgbd = new DecoderFactory().binaryDecoder(msgbis, null);
+            GenericRecord dxxRecord = null;
 
-                        NodeLocator n1 = rule.getNodelocator();
-                        if (n1.getNodesNum() > 0) {
-                            RNode node = n1.getPrimary(sb.toString());
-                            if (messageTransferStation.containsKey(node)) {
-                                ArrayBlockingQueue abq = (ArrayBlockingQueue) messageTransferStation.get(node);
-                                abq.put(onedata);
-                            } else {
-                                logger.error("there is no this node in " + rule.getTopic() + " " + rule.getServiceName());
-                                storeStrandedData(rule, onedata);
-                            }
+            try {
+                dxxRecord = msgreader.read(null, msgbd);
+            } catch (IOException ex) {
+                logger.info((new Date()) + " split the one data from the topic " + rule.getTopic() + " in the dataPool wrong " + ex, ex);
+                storeUselessData(rule.getTopic(), onedata);
+                continue;
+            }
+
+            String flag = null;
+            Map<Rule, String> ruleToControl = (Map<Rule, String>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_CONTROL);
+            flag = ruleToControl.get(rule);
+            if (flag.equals("start")) {
+                if (rule.getType() == 0) {
+                    NodeLocator n0 = rule.getNodelocator();
+                    String randomstring = generateString(10);
+                    if (n0.getNodesNum() > 0) {
+                        RNode node = n0.getPrimary(randomstring);
+                        if (messageTransferStation.containsKey(node)) {
+                            ArrayBlockingQueue abq = (ArrayBlockingQueue) messageTransferStation.get(node);
+                            abq.put(onedata);
                         } else {
-                            //logger.info("there is no accept node for the service " + rule.getServiceName());
+                            logger.error("there is no this node in " + rule.getTopic() + " " + rule.getServiceName());
                             storeStrandedData(rule, onedata);
-                        }
-                    } else if (rule.getType() == 2) {
-                        String f = rule.getFilters();
-                        if (isTrue(f, dxxRecord)) {
-                            NodeLocator n2 = rule.getNodelocator();
-                            if (n2.getNodesNum() > 0) {
-                                String randomstring = generateString(10);
-                                RNode node = n2.getPrimary(randomstring);
-                                if (messageTransferStation.containsKey(node)) {
-                                    ArrayBlockingQueue abq = (ArrayBlockingQueue) messageTransferStation.get(node);
-                                    abq.put(onedata);
-                                } else {
-                                    logger.error("there is no this node in " + rule.getTopic() + " " + rule.getServiceName());
-                                    storeStrandedData(rule, onedata);
-                                }
-                            } else {
-                                //logger.info("there is no accept node for the service " + rule.getServiceName());
-                                storeStrandedData(rule, onedata);
-                            }
-                        } else {
-                        }
-                    } else if (rule.getType() == 3) {
-                        String[] keywords = (rule.getKeywords()).split("\\;");
-                        String f = rule.getFilters();
-                        if (isTrue(f, dxxRecord)) {
-                            NodeLocator n3 = rule.getNodelocator();
-                            if (n3.getNodesNum() > 0) {
-                                StringBuilder sb = new StringBuilder();
-                                for (String ss : keywords) {
-                                    if (dxxRecord.get(ss) == null) {
-                                        sb.append("");
-                                    } else {
-                                        sb.append((dxxRecord.get(ss)).toString());
-                                    }
-                                }
-                                RNode node = n3.getPrimary(sb.toString());
-                                if (messageTransferStation.containsKey(node)) {
-                                    ArrayBlockingQueue abq = (ArrayBlockingQueue) messageTransferStation.get(node);
-                                    abq.put(onedata);
-                                } else {
-                                    logger.error("there is no this node in " + rule.getTopic() + " " + rule.getServiceName());
-                                    storeStrandedData(rule, onedata);
-                                }
-                            } else {
-                                //logger.info("there is no accept node for the service " + rule.getServiceName());
-                                storeStrandedData(rule, onedata);
-                            }
-                        } else {
                         }
                     } else {
-                        logger.info("rule is wrong!!! for type is " + rule.getType());
+                        //logger.info("there is no accept node for the service " + rule.getServiceName());
                         storeStrandedData(rule, onedata);
                     }
+                } else if (rule.getType() == 1) {
+                    String[] keywords = (rule.getKeywords()).split("\\;");
+                    StringBuilder sb = new StringBuilder();
+                    for (String s : keywords) {
+                        if (dxxRecord.get(s) == null) {
+                            sb.append("");
+                        } else {
+                            sb.append((dxxRecord.get(s)).toString());
+                        }
+                    }
+
+                    NodeLocator n1 = rule.getNodelocator();
+                    if (n1.getNodesNum() > 0) {
+                        RNode node = n1.getPrimary(sb.toString());
+                        if (messageTransferStation.containsKey(node)) {
+                            ArrayBlockingQueue abq = (ArrayBlockingQueue) messageTransferStation.get(node);
+                            abq.put(onedata);
+                        } else {
+                            logger.error("there is no this node in " + rule.getTopic() + " " + rule.getServiceName());
+                            storeStrandedData(rule, onedata);
+                        }
+                    } else {
+                        //logger.info("there is no accept node for the service " + rule.getServiceName());
+                        storeStrandedData(rule, onedata);
+                    }
+                } else if (rule.getType() == 2) {
+                    String f = rule.getFilters();
+                    if (isTrue(f, dxxRecord)) {
+                        NodeLocator n2 = rule.getNodelocator();
+                        if (n2.getNodesNum() > 0) {
+                            String randomstring = generateString(10);
+                            RNode node = n2.getPrimary(randomstring);
+                            if (messageTransferStation.containsKey(node)) {
+                                ArrayBlockingQueue abq = (ArrayBlockingQueue) messageTransferStation.get(node);
+                                abq.put(onedata);
+                            } else {
+                                logger.error("there is no this node in " + rule.getTopic() + " " + rule.getServiceName());
+                                storeStrandedData(rule, onedata);
+                            }
+                        } else {
+                            //logger.info("there is no accept node for the service " + rule.getServiceName());
+                            storeStrandedData(rule, onedata);
+                        }
+                    } else {
+                    }
+                } else if (rule.getType() == 3) {
+                    String[] keywords = (rule.getKeywords()).split("\\;");
+                    String f = rule.getFilters();
+                    if (isTrue(f, dxxRecord)) {
+                        NodeLocator n3 = rule.getNodelocator();
+                        if (n3.getNodesNum() > 0) {
+                            StringBuilder sb = new StringBuilder();
+                            for (String ss : keywords) {
+                                if (dxxRecord.get(ss) == null) {
+                                    sb.append("");
+                                } else {
+                                    sb.append((dxxRecord.get(ss)).toString());
+                                }
+                            }
+                            RNode node = n3.getPrimary(sb.toString());
+                            if (messageTransferStation.containsKey(node)) {
+                                ArrayBlockingQueue abq = (ArrayBlockingQueue) messageTransferStation.get(node);
+                                abq.put(onedata);
+                            } else {
+                                logger.error("there is no this node in " + rule.getTopic() + " " + rule.getServiceName());
+                                storeStrandedData(rule, onedata);
+                            }
+                        } else {
+                            //logger.info("there is no accept node for the service " + rule.getServiceName());
+                            storeStrandedData(rule, onedata);
+                        }
+                    } else {
+                    }
+                } else {
+                    logger.info("rule is wrong!!! for type is " + rule.getType());
+                    storeStrandedData(rule, onedata);
                 }
             }
-        } catch (IOException ex) {
-            logger.error(ex, ex);
-        } catch (InterruptedException ex) {
-            logger.error(ex, ex);
         }
     }
 
@@ -218,7 +235,8 @@ public class TransmitStrandedDataThread implements Runnable {
 
     /**
      *
-     * judge the string is valid or not , return the true if is valid , or return false
+     * judge the string is valid or not , return the true if is valid , or
+     * return false
      */
     private boolean isTrue(String s, GenericRecord dxxRecord) {
         if ((!s.contains("|")) && (!s.contains("&"))) {
@@ -256,37 +274,57 @@ public class TransmitStrandedDataThread implements Runnable {
 
     /**
      *
-     * store the stranded data to the file 
+     * store the stranded data to the file
      */
     private void storeStrandedData(Rule rule, byte[] onedata) {
         ConcurrentHashMap<Rule, ArrayBlockingQueue> strandedDataStore = (ConcurrentHashMap<Rule, ArrayBlockingQueue>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_STORE);
-        if (strandedDataStore.containsKey(rule)) {
-            ArrayBlockingQueue sdQueue = strandedDataStore.get(rule);
-            try {
-                sdQueue.put(onedata);
-            } catch (InterruptedException ex) {
-                logger.error(ex, ex);
+        synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_STRANDEDDATA)) {
+            if (strandedDataStore.containsKey(rule)) {
+                ArrayBlockingQueue sdQueue = strandedDataStore.get(rule);
+                try {
+                    sdQueue.put(onedata);
+                } catch (InterruptedException ex) {
+                    logger.error(ex, ex);
+                }
+            } else {
+                ArrayBlockingQueue sdQueue = new ArrayBlockingQueue(5000);
+                strandedDataStore.put(rule, sdQueue);
+                StoreStrandedDataThread sdt = new StoreStrandedDataThread(sdQueue, rule);
+                Thread tsdt = new Thread(sdt);
+                tsdt.start();
+                try {
+                    sdQueue.put(onedata);
+                } catch (InterruptedException ex) {
+                    logger.error(ex, ex);
+                }
             }
-        } else {
-            synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_STRANDEDDATA)) {
-                if (strandedDataStore.containsKey(rule)) {
-                    ArrayBlockingQueue sdQueue = strandedDataStore.get(rule);
-                    try {
-                        sdQueue.put(onedata);
-                    } catch (InterruptedException ex) {
-                        logger.error(ex, ex);
-                    }
-                } else {
-                    ArrayBlockingQueue sdQueue = new ArrayBlockingQueue(5000);
-                    strandedDataStore.put(rule, sdQueue);
-                    StoreStrandedDataThread sdt = new StoreStrandedDataThread(sdQueue, rule);
-                    Thread tsdt = new Thread(sdt);
-                    strandedDataStore.put(rule, sdQueue);
-                    try {
-                        sdQueue.put(onedata);
-                    } catch (InterruptedException ex) {
-                        logger.error(ex, ex);
-                    }
+        }
+    }
+
+    /**
+     *
+     * place the useless data to the uselessDataStore
+     */
+    private void storeUselessData(String topic, byte[] onedata) {
+        ConcurrentHashMap<String, ArrayBlockingQueue> uselessDataStore = (ConcurrentHashMap<String, ArrayBlockingQueue>) RuntimeEnv.getParam(GlobalVariables.USELESS_DATA_STORE);
+        synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_USELESSDATA)) {
+            if (uselessDataStore.containsKey(topic)) {
+                ArrayBlockingQueue sdQueue = uselessDataStore.get(topic);
+                try {
+                    sdQueue.put(onedata);
+                } catch (InterruptedException ex) {
+                    logger.error(ex, ex);
+                }
+            } else {
+                ArrayBlockingQueue sdQueue = new ArrayBlockingQueue(5000);
+                uselessDataStore.put(topic, sdQueue);
+                StoreUselessDataThread sudt = new StoreUselessDataThread(sdQueue, topic);
+                Thread tsudt = new Thread(sudt);
+                tsudt.start();
+                try {
+                    sdQueue.put(onedata);
+                } catch (InterruptedException ex) {
+                    logger.error(ex, ex);
                 }
             }
         }

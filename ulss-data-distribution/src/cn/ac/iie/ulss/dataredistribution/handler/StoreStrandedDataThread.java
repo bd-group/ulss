@@ -12,11 +12,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileWriter;
@@ -45,7 +45,8 @@ class StoreStrandedDataThread implements Runnable {
     String msgSchemaName = null;
     String docsSchemaContent = null;
     int size = 1000;
-    String dataDir = (String) RuntimeEnv.getParam("dataDir");
+    String dataDir = (String) RuntimeEnv.getParam(RuntimeEnv.DATA_DIR);
+    SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmss");
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -73,7 +74,6 @@ class StoreStrandedDataThread implements Runnable {
 
         int count = 0;
         int count2 = 0;
-        int co = 0;
         File f = null;
         File out = new File(dataDir + "strandeddata");
         while (true) {
@@ -103,7 +103,7 @@ class StoreStrandedDataThread implements Runnable {
                 }
 
                 count = 0;
-                while (count < 1000) {
+                while (count < 100) {
                     if (!sdQueue.isEmpty()) {
                         byte[] sendData = pack(sdQueue);
                         if (sendData == null) {
@@ -127,19 +127,25 @@ class StoreStrandedDataThread implements Runnable {
                     } else {
                         try {
                             dataFileWriter.flush();
-                            dataFileWriter.close();
-                        } catch (IOException ex) {
+                        } catch (Exception ex) {
                             logger.error(ex, ex);
                         }
                         try {
                             Thread.sleep(1000);
-                        } catch (InterruptedException ex) {
+                        } catch (Exception ex) {
                             logger.error(ex, ex);
                         }
                         count++;
                     }
                 }
-                String fb = System.currentTimeMillis() + "_" + f.getName();
+                try {
+                    dataFileWriter.flush();
+                    dataFileWriter.close();
+                } catch (Exception ex) {
+                    logger.error(ex,ex);
+                }
+                Date d = new Date();
+                String fb = format.format(d) + "_" + f.getName();
                 if (f.exists()) {
                     f.renameTo(new File(dataDir + "strandeddata/" + fb));
                 }
@@ -180,7 +186,7 @@ class StoreStrandedDataThread implements Runnable {
                 count++;
             }
             long etime = System.currentTimeMillis();
-            if ((etime - stime) >= 5000) {
+            if ((etime - stime) >= 10000) {
                 break;
             }
         }
