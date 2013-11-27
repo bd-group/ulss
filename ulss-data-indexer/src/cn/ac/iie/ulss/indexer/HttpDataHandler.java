@@ -4,23 +4,23 @@
  */
 package cn.ac.iie.ulss.indexer;
 
+import cn.ac.iie.ulss.metastore.MetastoreWrapper;
 import cn.ac.iie.ulss.struct.DataSourceConfig;
 import cn.ac.iie.ulss.struct.LuceneFileWriter;
 import cn.ac.iie.ulss.util.FileFilter;
 import cn.ac.iie.ulss.util.LuceneWriterUtil;
-import cn.ac.iie.ulss.metastore.MetastoreWrapper;
 import devmap.DevMap;
 import iie.metastore.MetaStoreClient;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.servlet.ServletInputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -45,7 +45,6 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.thrift.TException;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.handler.AbstractHandler;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class HttpDataHandler extends AbstractHandler {
 
@@ -145,18 +144,6 @@ public class HttpDataHandler extends AbstractHandler {
                     if (count % 500 == 0) {
                         log.info("now the increate state file num is " + id2Createindex.size() + "，and the file ids are " + id2Createindex.keySet());
                     }
-//                    if (HttpDataHandler.closedIdMap.containsKey(file_id)) {
-//                        HttpDataHandler.closedIdMap.remove(file_id);
-//                        HttpDataHandler.id2Createindex.remove(file_id); //如果在merge、提交、调用close方法的过程中发送来了数据，那么就要将数据如何处理？？
-//                        log.error("get the not in create status file_id " + file_id + "，will resonse the client ");
-//                        hsResonse.setStatus(HttpServletResponse.SC_OK);
-//                        try {
-//                            hsResonse.getWriter().println("-2\n" + "the file for file id " + file_id + " has been closed,please check and write to aother file");
-//                        } catch (IOException ex) {
-//                            log.error(ex, ex);
-//                        }
-//                        return;
-//                    }
                     try {                                                            /*不包括这个file_id的话证明对应的create线程已经结束或者还没有开始，那么就要进行创建*/
                         if (!HttpDataHandler.id2Createindex.containsKey(file_id)) {  //与CreateIndex中的HttpDataHandler.key2Createindex.remove(sf.getFid()) 语句同步?
                             List<SFile> luceneFileList = new ArrayList<SFile>();
@@ -248,7 +235,6 @@ public class HttpDataHandler extends AbstractHandler {
                 ByteArrayInputStream docsbis = new ByteArrayInputStream(req);
                 BinaryDecoder docsbd = new DecoderFactory().binaryDecoder(docsbis, null);
                 GenericRecord docsRecord = new GenericData.Record(docsSchema);
-                //log.debug("now docsRecord is  " + docsRecord);
                 try {
                     docsReader.read(docsRecord, docsbd);
                     receiveIntotal.addAndGet(((GenericData.Array<GenericRecord>) docsRecord.get(Indexer.docs_set_name)).size());
@@ -259,6 +245,8 @@ public class HttpDataHandler extends AbstractHandler {
                         if (id2Createindex.get(file_id) == null) {   //就是被createindex线程给remove掉了
                             hsResonse.setStatus(HttpServletResponse.SC_OK);
                             hsResonse.getWriter().println("-2\n" + "warning:the file has been closed ！");
+                            log.error("the file has been closed for file_id " + file_id);
+                            return;
                         } else if (!id2Createindex.get(file_id).isEnd.get()) {
                             id2Createindex.get(file_id).inbuffer.put(docsRecord);//将数据写入对象的缓冲区中
                         } else {
@@ -269,13 +257,12 @@ public class HttpDataHandler extends AbstractHandler {
                             if (HttpDataHandler.id2Createindex.get(file_id).isShouldNewRaw.get()) {
                                 HttpDataHandler.id2Createindex.get(file_id).isShouldNewRaw.set(false);
                                 String pathInfo = getPathDirs(filelocation);
-                                cacheFileName = Indexer.cachePath + "/" + file_id + "_" + devId + "_" + pathInfo + "_" + schemaName + "_" + System.currentTimeMillis() / 1000 + ".ori";
+                                cacheFileName = Indexer.cachePath + "/" + file_id + "+" + devId + "+" + pathInfo + "+" + schemaName + "_" + System.currentTimeMillis() / 1000 + ".ori";
                                 log.info("new one cache data file " + cacheFileName);
                                 HttpDataHandler.id2cachefile.put(file_id, cacheFileName);//（put 操作就是更改file_id对应的文件名)
                                 HttpDataHandler.writeAvroFile(docsRecord, cacheFileName, true);
                             } else {
                                 cacheFileName = HttpDataHandler.id2cachefile.get(file_id);
-                                //log.info("append data to file " + cacheFileName);
                                 HttpDataHandler.writeAvroFile(docsRecord, cacheFileName, false);
                             }
                             hsResonse.getWriter().println("0\nbzs_s\nulss_s");

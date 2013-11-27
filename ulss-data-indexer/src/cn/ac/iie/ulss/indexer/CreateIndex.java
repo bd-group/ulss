@@ -43,7 +43,7 @@ public class CreateIndex implements Runnable {
     final Object lk;
     final Object clientLock;  //用于协调各个线程对client进行操作的锁
     private IndexWriter iw = null;
-    private List<SFile> Listsf = null;
+    private List<SFile> Listsf = null; //实际上有且只有一个文件
     private String location;
 
     public CreateIndex(DataSourceConfig dsc, MetaStoreClient msc, ArrayBlockingQueue buf, LuceneFileWriter norLucWriter, long f_id, Object l, Object clientLk) {
@@ -189,11 +189,11 @@ public class CreateIndex implements Runnable {
         }
 
         synchronized (this.lk) {
-            if (MetastoreWrapper.makeSureCloseFile(Listsf, doc_num, file_legth)) {
+            if (MetastoreWrapper.makeSureCloseFile(Listsf.get(0), doc_num, file_legth)) {
                 MetastoreWrapper.retryCloseUnclosedFile(Indexer.unclosedFilePath);
             } else {
                 MetastoreWrapper.writeFileInfo(Indexer.unclosedFilePath, file_id, doc_num, file_legth);//将未关闭的文件写入单独的文件中
-                log.warn("close current file:" + this.file_id + " fail,there is no need to close the unclosed file");
+                log.warn("close current file:" + this.file_id + " " + doc_num + " " + file_legth + "fail,there is no need to close the unclosed file");
             }
         }
         log.info("close normal lucene sfile done");

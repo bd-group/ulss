@@ -7,7 +7,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReadWriteLock;
 import org.I0Itec.zkclient.ZkClient;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
@@ -43,7 +42,7 @@ public class Indexer {
     /*
      */
     public static int metaStoreCientPort = 0;
-    public static int writeIndexThreadNum = 8; //每个数据源索引创建线程的数量，default is 4
+    public static int writeIndexThreadNum = 4; //每个数据源索引创建线程的数量，default is 4
     public static int duplicateNum = 2;
     public static int httpServerPool = 50;
     public static int intervalWriterKey = -1;
@@ -51,26 +50,14 @@ public class Indexer {
     public static int bufSize = 20;
     public static int maxDelaySeconds = 200;
     public static int commitgab = 200;
-    /*
-     *
-     */
-    public static ConcurrentHashMap<String, Table> tableMap = new ConcurrentHashMap<String, Table>(10, 0.8f);  //db+table name 到table对象的映射
-    public static ConcurrentHashMap<String, String> schemaname2Tablename = new ConcurrentHashMap<String, String>(10, 0.8f);  //schema的名字到name到table对象的映射
-    public static ConcurrentHashMap<String, String> tablename2Schemaname = new ConcurrentHashMap<String, String>(10, 0.8f);  //schema的名字到name到table对象的映射
-    /*
-     */
-    public static ConcurrentHashMap<String, String> schemaname2Metaqname = new ConcurrentHashMap<String, String>(10, 0.8f);
-    public static ConcurrentHashMap<String, String> metaqname2schemaname = new ConcurrentHashMap<String, String>(10, 0.8f);
-    /*
-     */
+    /**/
     public static ConcurrentHashMap<String, String> schemaname2schemaContent = new ConcurrentHashMap<String, String>(20, 0.8f);
     public static ConcurrentHashMap<String, Schema> schemaname2Schema = new ConcurrentHashMap<String, Schema>(20, 0.8f);
-    /*
-     */
-    public static ConcurrentHashMap<String, List<Index>> indexMap = new ConcurrentHashMap<String, List<Index>>(10, 0.8f);
-    public static ConcurrentHashMap<String, ReadWriteLock> schema2ReadWriteLock = new ConcurrentHashMap<String, ReadWriteLock>();
-    public static ConcurrentHashMap<String, DatumReader<GenericRecord>> schema2Reader = new ConcurrentHashMap<String, DatumReader<GenericRecord>>();
-    ;
+    /**/
+    public static ConcurrentHashMap<String, Table> tablename2Table = new ConcurrentHashMap<String, Table>(10, 0.8f);  //db+table name 到table对象的映射
+    public static ConcurrentHashMap<String, List<Index>> tablename2indexs = new ConcurrentHashMap<String, List<Index>>(10, 0.8f);
+    /**/
+    public static ConcurrentHashMap<String, String> tablename2Schemaname = new ConcurrentHashMap<String, String>(10, 0.8f);  //schema的名字到name到table对象的映射
     /*
      */
     public static String docsSchemaContent = null;
@@ -92,9 +79,7 @@ public class Indexer {
     public static void initSchema() {
         List<List<String>> schema2tableList = Indexer.imd.getSchema2table();
         for (int i = 0; i < schema2tableList.size(); i++) {
-            Indexer.schemaname2Tablename.put(schema2tableList.get(i).get(0).toLowerCase(), schema2tableList.get(i).get(1).toLowerCase());
             Indexer.tablename2Schemaname.put(schema2tableList.get(i).get(1).toLowerCase(), schema2tableList.get(i).get(0).toLowerCase());
-
         }
 
         String schemaName = "";
@@ -117,16 +102,12 @@ public class Indexer {
                     log.info("init schema for docs is ok");
                 } else {
                     log.info("init schema data reader and schema and  metaq for schema " + schemaName + " ...");
-                    String mqName = list.get(2);
+                    //String mqName = list.get(2);
                     Protocol protocol = Protocol.parse(schemaContent);
                     Schema schema = protocol.getType(schemaName);
-                    DatumReader<GenericRecord> schemaReader = new GenericDatumReader<GenericRecord>(schema);
-
                     log.debug("put schemaReader、mq for " + schemaName + " to map");
-                    Indexer.metaqname2schemaname.put(mqName, schemaName);
-                    Indexer.schemaname2Metaqname.put(schemaName, mqName);
+                    //Indexer.metaqname2schemaname.put(mqName, schemaName); //mqName=nc.sichuan; nc.yunnan  etc
                     Indexer.schemaname2Schema.put(schemaName, schema);
-                    Indexer.schema2Reader.put(schemaName, schemaReader);
                 }
                 Indexer.schemaname2schemaContent.put(schemaName, schemaContent);
             }
@@ -185,9 +166,9 @@ public class Indexer {
                 List<String> tbList = cli.client.getAllTables(dbName);
                 for (String tbName : tbList) {
                     Table tb = cli.client.getTable(dbName, tbName);
-                    tableMap.put(dbName + "." + tbName, tb);
+                    tablename2Table.put(dbName + "." + tbName, tb);
                     List<Index> idxList = cli.client.listIndexes(dbName, tbName, (short) -1);
-                    indexMap.put(dbName + "." + tbName, idxList);
+                    tablename2indexs.put(dbName + "." + tbName, idxList);
                     log.info("get " + dbName + "." + tbName + " ok ");
                 }
             }

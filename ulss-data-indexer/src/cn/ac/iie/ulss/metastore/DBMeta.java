@@ -2,22 +2,9 @@ package cn.ac.iie.ulss.metastore;
 
 import cn.ac.iie.ulss.dao.SimpleDaoImpl;
 import cn.ac.iie.ulss.indexer.Indexer;
-
-import java.math.BigDecimal;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import org.apache.log4j.Logger;
-import cn.ac.iie.ulss.util.Constants;
-import java.sql.ResultSet;
 import java.util.Date;
-import java.util.HashSet;
-import org.apache.avro.Protocol;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.generic.GenericRecord;
+import java.util.List;
+import org.apache.log4j.Logger;
 
 public class DBMeta {
 
@@ -45,30 +32,9 @@ public class DBMeta {
         return sb.toString();
     }
 
-    public void updateMetaqOffset(String dbName, String tbName, String partName, long offset, String timeLable) {
-        long id = simpleDao.getNextMetaqID();
-        String sql = "insert into METAQ_OFFSET_RECORD"
-                + "(ID,DATABASE_NAME,TABLE_NAME,HOSTNAME,PARTITION_NAME,OFFSET,UPDATETIME,TIME_LABLE,IS_REDO) values("
-                + id + ",'" + dbName + "','" + tbName + "','" + Indexer.hostName + "','" + partName + "'," + offset + ",sysdate,'" + timeLable + "'," + 0
-                + ")";
-        log.info(sql);
-        simpleDao.excuteSQL(sql);
-    }
-
-    public long getMetaqOffset(String dbName, String tbName, String partName, String timeLable) {
-        String sql = "select offset from  METAQ_OFFSET_RECORD where "
-                + "DATABASE_NAME='" + dbName + "' and TABLE_NAME='" + tbName
-                + "' and PARTITION_NAME='" + partName + "' order by id desc";
-        log.info(sql);
-        List<List<Long>> resL = simpleDao.queryForList(sql);
-        if (resL.size() <= 0) {
-            return 0;
-        }
-        return resL.get(0).get(0);
-    }
-
     public List<List<String>> getAllSchema() {
-        String sql = "select dataschema.schema_name,dataschema.schema_content,dataschema_mq.mq from dataschema left outer join dataschema_mq on dataschema.schema_name=dataschema_mq.schema_name";
+        String sql = "select dataschema.schema_name,dataschema.schema_content from dataschema";
+        //String sql = "select dataschema.schema_name,dataschema.schema_content,dataschema_mq.mq from dataschema left outer join dataschema_mq on dataschema.schema_name=dataschema_mq.schema_name";
         log.info("get all schema is " + sql);
         List<List<String>> resL = simpleDao.queryForList(sql);
         if (resL.size() <= 0) {
@@ -78,7 +44,8 @@ public class DBMeta {
     }
 
     public List<List<String>> getSchema2table() {
-        String sql = "select schema_name,table_name from DATASCHEMA_TABLE";
+        //String sql = "select schema_name,table_name from DATASCHEMA_TABLE";
+        String sql = "select MQ_TABLE.table_name,DATASCHEMA_MQ.SCHEMA_NAME  from MQ_TABLE  left outer join DATASCHEMA_MQ   on DATASCHEMA_MQ.mq=MQ_TABLE.mq";
         log.info("get schema is " + sql);
         List<List<String>> resL = simpleDao.queryForList(sql);
         if (resL.size() <= 0) {
@@ -88,7 +55,7 @@ public class DBMeta {
     }
 
     public String getDocSchema() {
-        String sql = "select dataschema.schema_name, dataschema.schema_content from   dataschema where schema_name=" + "'" + Indexer.docs_schema_name + "'";
+        String sql = "select dataschema.schema_name, dataschema.schema_content from dataschema where schema_name=" + "'" + Indexer.docs_schema_name + "'";
         log.info("get schema is " + sql);
         List<List<String>> resL = simpleDao.queryForList(sql);
         if (resL.size() <= 0) {

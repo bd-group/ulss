@@ -22,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
 import org.apache.avro.Protocol;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
@@ -112,7 +111,7 @@ public class WriteIndexFile implements Runnable {
         String delimiter = "";
 
         try {
-            tb = Indexer.tableMap.get(dbName + "." + tableName);
+            tb = Indexer.tablename2Table.get(dbName + "." + tableName);
             log.info("now process table is " + dbName + "." + tableName);
 
             delimiter = tb.getSd().getParameters().get("colelction.delim");
@@ -184,7 +183,7 @@ public class WriteIndexFile implements Runnable {
                 colsMap.put(col.getName().toLowerCase(), col.getType());
             }
 
-            List<Index> idxList = Indexer.indexMap.get(dbName + "." + tableName);
+            List<Index> idxList = Indexer.tablename2indexs.get(dbName + "." + tableName);
             for (Index idx : idxList) {
                 String idxName = idx.getIndexName().toLowerCase();
                 log.info("index name is " + idxName);
@@ -322,20 +321,6 @@ public class WriteIndexFile implements Runnable {
                             BinaryDecoder dxxbd = new DecoderFactory().binaryDecoder(dxxbis, null);
                             GenericRecord dxxRecord;
                             dxxRecord = dxxReader.read(null, dxxbd);
-                            if ("hash".equalsIgnoreCase(lowlevel_physical_partType)) {       /*如果是哈希的方式，那么根据哈希出来的值找到对应的IndexWriter然后使用IndexerWriter写入document*/
-                                Object o = dxxRecord.get(lowlevel_partColName);
-                                if (o == null) {     /*这是哈希分区的核心所在，获取分区列，获取哈希值，获取哈希分区的ID*/
-                                    log.error("get value for " + lowlevel_partColName + " is null");
-                                    hashKey = 0;
-                                } else {
-                                    partString = o.toString();
-                                    hashKey = Math.abs(partString.hashCode()) % lowlevel_partNum;
-                                }
-                            } else if ("interval".equalsIgnoreCase(lowlevel_physical_partType)) {
-                                hashKey = Indexer.intervalWriterKey;//如果是interval分区，则hashmap的key就是 -1
-                            } else {
-                                log.error("unknown partition type");
-                            }
                             hashKey = 0;//新版本的文件里只写一个文件
 
                             writer = this.normalLucWriter.getWriterMap().get(hashKey);

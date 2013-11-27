@@ -30,26 +30,22 @@ public class MetastoreWrapper {
 
     public static Logger log = Logger.getLogger(MetastoreWrapper.class.getName());
 
-    public static boolean makeSureCloseFile(List<SFile> Listsf, long doc_num, long file_legth) {
+    public static boolean makeSureCloseFile(SFile sf, long doc_num, long file_legth) {
         boolean isOver = false;
         int errorCount = 0;
         while (!isOver) {
             SFile tmp = null;
             try {
-                for (SFile sf : Listsf) {
-                    HttpDataHandler.id2Createindex.remove(sf.getFid());
-                }
+                HttpDataHandler.id2Createindex.remove(sf.getFid());
 
-                for (SFile sf : Listsf) {
-                    tmp = sf;
-                    log.info("close normal sfile " + sf.toString());
-                    sf.setRecord_nr(doc_num);
-                    sf.setLength(file_legth);
-                    log.info("after update,the close normal sfile is : " + sf.toString());
-                    Indexer.cli.client.close_file(sf);
+                tmp = sf;
+                log.info("close normal sfile " + sf.toString());
+                sf.setRecord_nr(doc_num);
+                sf.setLength(file_legth);
+                log.info("after update,the close normal sfile is : " + sf.toString());
+                Indexer.cli.client.close_file(sf);
 
-                    isOver = true;
-                }
+                isOver = true;
             } catch (FileOperationException e) {
                 log.error("when close file get warn:" + e, e);
                 tmp = makeSureGetFile(tmp.getFid(), new StringBuilder());
@@ -89,10 +85,8 @@ public class MetastoreWrapper {
         StringBuilder sb = new StringBuilder();
         SFile sf = null;
         if ((sf = makeSureGetFile(file_id, sb)) != null) {
-            List ls = new ArrayList<SFile>();
-            ls.add(sf);
             if (sf.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
-                if (!MetastoreWrapper.makeSureCloseFile(ls, record_num, length)) {
+                if (!MetastoreWrapper.makeSureCloseFile(sf, record_num, length)) {
                     return false;
                 }
             } else if (sf.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
@@ -148,7 +142,7 @@ public class MetastoreWrapper {
                     if (MetastoreWrapper.makeSureCloseUnclosedFile(file_id, record_num, length)) {
                         File f = new File(path + "/" + file_id); //删除磁盘上的部分相关信息
                         f.deleteOnExit();
-                        log.info("now close the file " + file_id + " and delete the unresolved information done");
+                        log.info("now close the file " + file_id + " " + f.getAbsolutePath() + " and delete the unresolved information done, is it exists now ? " + f.exists());
                     } else {
                     }
                 }
@@ -180,10 +174,12 @@ public class MetastoreWrapper {
         String s = "";
         File file = new File(path + "/" + fid + "");
         try {
-            BufferedReader bur = new BufferedReader(new FileReader(file));
+            FileReader f = new FileReader(file);
+            BufferedReader bur = new BufferedReader(f);
             while ((s = bur.readLine()) != null) {
-                return s;
             }
+            f.close();
+            bur.close();
         } catch (FileNotFoundException ex) {
             log.error(ex, ex);
         } catch (IOException ex) {
@@ -239,7 +235,7 @@ public class MetastoreWrapper {
                 isOver = false;
                 errorCount++;
                 try {
-                    SFile sf = Indexer.cli.client.get_file_by_id(file_id);
+                    SFile sf = MetastoreWrapper.makeSureGetFile(file_id, new StringBuilder());
                     if (sf != null && sf.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
                         isOver = true;
                         break;
