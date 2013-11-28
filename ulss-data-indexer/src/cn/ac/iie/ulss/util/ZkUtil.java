@@ -21,7 +21,7 @@ import org.apache.commons.logging.LogFactory;
 public class ZkUtil {
 
     private static Log logger = LogFactory.getLog(ZkUtil.class);
-
+    
     /**
      * make sure a persiste.nt path exists in ZK. Create the path if not exist.
      */
