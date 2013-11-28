@@ -1,8 +1,10 @@
+package cn.ac.iie.ulss.dataredistribution.commons;
+
 /*
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package cn.ac.iie.ulss.dataredistribution.commons;
+
 
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
 import cn.ac.iie.ulss.dataredistribution.handler.HandlerDetectNodeThread;

@@ -53,7 +53,8 @@ import org.apache.log4j.PropertyConfigurator;
  */
 public class DataSenderThread implements Runnable {
 
-    Long version = 0L;
+    String partT = null;
+    String keywords = null;
     ArrayBlockingQueue sendQueue = null;
     Integer sendPoolSize = 5000;
     String topic = null;
@@ -82,7 +83,7 @@ public class DataSenderThread implements Runnable {
         logger = org.apache.log4j.Logger.getLogger(DataSenderThread.class.getName());
     }
 
-    public DataSenderThread(ArrayBlockingQueue abq, Integer sendPoolSize, RNode node, String topic, String serviceName, ThreadGroup sendThreadPool, Rule rule, String keyinterval, Long version) {
+    public DataSenderThread(ArrayBlockingQueue abq, Integer sendPoolSize, RNode node, String topic, String serviceName, ThreadGroup sendThreadPool, Rule rule, String keyinterval, String partT , String keywords) {
         sendQueue = abq;
         this.sendPoolSize = sendPoolSize;
         this.node = node;
@@ -91,7 +92,8 @@ public class DataSenderThread implements Runnable {
         this.sendThreadPool = sendThreadPool;
         this.rule = rule;
         this.keyinterval = keyinterval;
-        this.version = version;
+        this.partT = partT;
+        this.keywords = keywords;
     }
 
     @Override
@@ -158,7 +160,7 @@ public class DataSenderThread implements Runnable {
                         }
                     }
 
-                    SendToServiceThread sendT = new SendToServiceThread(sendData, node, topic, serviceName, rule, sendIP, keyinterval, f_id, road, count, version);
+                    SendToServiceThread sendT = new SendToServiceThread(sendData, node, topic, serviceName, rule, sendIP, keyinterval, f_id, road, count, partT , keywords);
                     while (sendThreadPool.activeCount() >= sendThreadPoolSize) {
                         logger.debug("the sendThreadPool for " + topic + " " + keyinterval + " " + node.getName() + " is full...");
                         try {
@@ -266,8 +268,8 @@ public class DataSenderThread implements Runnable {
             int attemp = 0;
             while (attemp <= attempSize) {
                 try {
-                    lsf = icli.filterTableFiles(rule.getPartType().split("\\|")[0], rule.getPartType().split("\\|")[1], list);
-                    logger.info("get the filelist for " + topic + " " + rule.getPartType().split("\\|")[0] + " " + rule.getPartType().split("\\|")[1] + " " + list + " " + lsf);
+                    lsf = icli.filterTableFiles(partT.split("\\|")[0], partT.split("\\|")[1], list);
+                    logger.info("get the filelist for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + list + " " + lsf);
                     break;
                 } catch (Exception ex) {
                     logger.error("can not get the SFileList " + ex, ex);
@@ -526,7 +528,6 @@ public class DataSenderThread implements Runnable {
         Long getf_id = 0L;
         String getroad = "";
 
-        String partType = rule.getPartType();
         MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
         MetaStoreClient cli = mscp.getClient();
         try {
@@ -536,8 +537,8 @@ public class DataSenderThread implements Runnable {
             int attemp = 0;
             while (attemp <= attempSize) {
                 try {
-                    lsf = icli.filterTableFiles(partType.split("\\|")[0], partType.split("\\|")[1], list);
-                    logger.info("get the filelist for " + topic + " " + partType.split("\\|")[0] + " " + partType.split("\\|")[1] + " " + list + " " + lsf);
+                    lsf = icli.filterTableFiles(partT.split("\\|")[0], partT.split("\\|")[1], list);
+                    logger.info("get the filelist for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + list + " " + lsf);
                     break;
                 } catch (Exception ex) {
                     logger.error("can not get the SFileList " + ex, ex);
@@ -662,29 +663,30 @@ public class DataSenderThread implements Runnable {
                 } catch (Exception ex) {
                     logger.error(ex, ex);
                 }
-
+                
+                String[] pa = partT.split("\\|");
                 List<SplitValue> list = new ArrayList<SplitValue>();
                 for (int j = 1; j <= 2; j++) { //设置一级和二级划分值
                     if (j == 1) {
                         SplitValue sv1 = new SplitValue();
-                        sv1.setVerison(version);
+                        sv1.setVerison(Long.parseLong(pa[pa.length-1]));
                         sv1.setLevel(j);//如果是interval分区，设置两个特征值，一个是上限一个是下限
                         sv1.setValue("" + stime);
-                        sv1.setSplitKeyName(rule.getKeywords().split("\\|")[0]);
+                        sv1.setSplitKeyName(keywords.split("\\|")[0]);
                         list.add(sv1);
 
                         SplitValue sv2 = new SplitValue();
-                        sv2.setVerison(version);
+                        sv2.setVerison(Long.parseLong(pa[pa.length-1]));
                         sv2.setLevel(j);//如果是interval分区，设置两个特征值，一个是上限一个是下限
                         sv2.setValue("" + etime);
-                        sv2.setSplitKeyName(rule.getKeywords().split("\\|")[0]);
+                        sv2.setSplitKeyName(keywords.split("\\|")[0]);
                         list.add(sv2);
                     } else if (j == 2) {
                         SplitValue sv = new SplitValue();
-                        sv.setVerison(version);
+                        sv.setVerison(Long.parseLong(pa[pa.length-1]));
                         sv.setLevel(j);
                         sv.setValue(rule.getNodeUrls().size() + "-" + node.getName());//设置哈希键值
-                        sv.setSplitKeyName(rule.getKeywords().split("\\|")[1]);
+                        sv.setSplitKeyName(keywords.split("\\|")[1]);
                         list.add(sv);
                     }
                 }
@@ -864,7 +866,7 @@ public class DataSenderThread implements Runnable {
             attemp = 0;
             while (attemp <= attempSize) {
                 try {
-                    lng = icli.getTableNodeGroups(rule.getPartType().split("\\|")[0], rule.getPartType().split("\\|")[1]);
+                    lng = icli.getTableNodeGroups(partT.split("\\|")[0], partT.split("\\|")[1]);
                     break;
                 } catch (Exception ex) {
                     logger.error("can not get the List<nodeGroup>" + ex, ex);
@@ -891,8 +893,8 @@ public class DataSenderThread implements Runnable {
 
             while (true) {
                 try {
-                    logger.info("begin to create file " + rule.getPartType().split("\\|")[0] + " " + rule.getPartType().split("\\|")[1] + " " + list);
-                    sf2 = icli.create_file_by_policy(cp, 2, rule.getPartType().split("\\|")[0], rule.getPartType().split("\\|")[1], list);
+                    logger.info("begin to create file " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + list);
+                    sf2 = icli.create_file_by_policy(cp, 2, partT.split("\\|")[0], partT.split("\\|")[1], list);
                     if (sf2 == null) {
                         logger.debug("can not create file for the topic " + topic + " " + keyinterval + " " + node.getName() + " from metastore ");
                         if (CFretryInterval < 30000) {
@@ -912,7 +914,7 @@ public class DataSenderThread implements Runnable {
                     String nodeN = sf2.getLocations().get(0).getNode_name();
                     if (nodeN == null) {
                         if (nodeNames.isEmpty()) {
-                            logger.debug("thres is no node in the nodeGroups for " + rule.getPartType().split("\\|")[0] + rule.getPartType().split("\\|")[1]);
+                            logger.debug("thres is no node in the nodeGroups for " + partT.split("\\|")[0] + partT.split("\\|")[1]);
                             try {
                                 Thread.sleep(2000);
                             } catch (Exception ex) {
@@ -923,7 +925,7 @@ public class DataSenderThread implements Runnable {
                             Random r = new Random();
                             int ran = r.nextInt(nodeNames.size());
                             if (nodeNames.get(ran) == null || nodeNames.get(ran).isEmpty()) {
-                                logger.debug("thres is null node in the nodeGroups for " + rule.getPartType().split("\\|")[0] + rule.getPartType().split("\\|")[1]);
+                                logger.debug("thres is null node in the nodeGroups for " + partT.split("\\|")[0] + partT.split("\\|")[1]);
                                 try {
                                     Thread.sleep(2000);
                                 } catch (Exception ex) {

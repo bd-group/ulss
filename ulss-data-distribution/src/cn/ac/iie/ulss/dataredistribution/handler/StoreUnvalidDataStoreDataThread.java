@@ -35,30 +35,31 @@ import org.apache.log4j.PropertyConfigurator;
 
 /**
  *
- * @author evan yang
+ * @author evan
  */
-class StoreStrandedDataThread implements Runnable {
+public class StoreUnvalidDataStoreDataThread implements Runnable {
 
     Rule rule = null;
     ArrayBlockingQueue sdQueue = null;
     String msgSchemaContent = null;
     String msgSchemaName = null;
     String docsSchemaContent = null;
-    int size = 1000;
+    int size = 100;
     String dataDir = (String) RuntimeEnv.getParam(RuntimeEnv.DATA_DIR);
-    SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmss");
     static org.apache.log4j.Logger logger = null;
+    SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmss");
 
     static {
         PropertyConfigurator.configure("log4j.properties");
-        logger = org.apache.log4j.Logger.getLogger(StoreStrandedDataThread.class.getName());
+        logger = org.apache.log4j.Logger.getLogger(StoreUnvalidDataStoreDataThread.class.getName());
     }
 
-    public StoreStrandedDataThread(ArrayBlockingQueue sdQueue, Rule rule) {
+    public StoreUnvalidDataStoreDataThread(ArrayBlockingQueue sdQueue, Rule rule) {
         this.sdQueue = sdQueue;
         this.rule = rule;
     }
 
+    @Override
     public void run() {
         String topic = rule.getTopic();
         String service = rule.getServiceName();
@@ -75,18 +76,19 @@ class StoreStrandedDataThread implements Runnable {
         int count = 0;
         int count2 = 0;
         File f = null;
-        File out = new File(dataDir + "strandeddata");
+        File out = new File(dataDir + "unvaliddata");
+
         while (true) {
             if (!sdQueue.isEmpty()) {
                 count2 = 0;
                 synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_DIR)) {
                     if (!out.exists() && !out.isDirectory()) {
                         out.mkdirs();
-                        logger.info("create the directory " + dataDir + "strandeddata");
+                        logger.info("create the directory " + dataDir + "unvaliddata");
                     }
                 }
 
-                f = new File(dataDir + "strandeddata/" + topic + service + ".st");
+                f = new File(dataDir + "unvaliddata/" + topic + service + ".uv");
                 if (f.exists()) {
                     try {
                         dataFileWriter.appendTo(f);
@@ -118,21 +120,21 @@ class StoreStrandedDataThread implements Runnable {
                             dxr = dxreader.read(null, dxdecoder);
                             dataFileWriter.append(dxr);
                             dataFileWriter.flush();
-                            logger.info("write 1000 strandedDataThread data to the file" + f.getName());
+                            logger.info("write " + size + " unvalid data to the file" + f.getName());
                         } catch (IOException ex) {
-                            logger.info("write 1000 strandedDataThread data to the file" + f.getName() + " error ");
+                            logger.info("write " + size + " unvalid data to the file" + f.getName() + " error ");
                             logger.error(ex, ex);
                             break;
                         }
                     } else {
                         try {
-                            dataFileWriter.flush();
-                        } catch (Exception ex) {
+                            dataFileWriter.flush();          
+                        } catch (IOException ex) {
                             logger.error(ex, ex);
                         }
                         try {
                             Thread.sleep(1000);
-                        } catch (Exception ex) {
+                        } catch (InterruptedException ex) {
                             logger.error(ex, ex);
                         }
                         count++;
@@ -141,20 +143,20 @@ class StoreStrandedDataThread implements Runnable {
                 try {
                     dataFileWriter.flush();
                     dataFileWriter.close();
-                } catch (Exception ex) {
+                } catch (IOException ex) {
                     logger.error(ex,ex);
                 }
                 Date d = new Date();
                 String fb = format.format(d) + "_" + f.getName();
                 if (f.exists()) {
-                    f.renameTo(new File(dataDir + "strandeddata/" + fb));
+                    f.renameTo(new File(dataDir + "unvaliddata/" + fb));
                 }
             } else {
                 count2++;
                 if (count2 >= 100) {
-                    ConcurrentHashMap<Rule, ArrayBlockingQueue> strandedDataStore = (ConcurrentHashMap<Rule, ArrayBlockingQueue>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_STORE);
-                    synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_STRANDEDDATA)) {
-                        strandedDataStore.remove(rule);
+                    ConcurrentHashMap<Rule, ArrayBlockingQueue> unvalidDataStore = (ConcurrentHashMap<Rule, ArrayBlockingQueue>) RuntimeEnv.getParam(GlobalVariables.UNVALID_DATA_STORE);
+                    synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_UNVALIDDATA)) {
+                        unvalidDataStore.remove(rule);
                     }
                     break;
                 }
@@ -186,13 +188,15 @@ class StoreStrandedDataThread implements Runnable {
                 count++;
             }
             long etime = System.currentTimeMillis();
-            if ((etime - stime) >= 10000) {
+            if ((etime - stime) >= 5000) {
                 break;
             }
         }
         if (count <= 0) {
             return null;
         }
+
+        logger.info("there are " + count + " unvalid data from the topic " + rule.getTopic() + " to the server " + rule.getServiceName());
         docsRecord.put(GlobalVariables.SIGN, "evan");
         docsRecord.put(GlobalVariables.DOC_SET, docSet);
         DatumWriter<GenericRecord> docsWriter = new GenericDatumWriter<GenericRecord>(docs);

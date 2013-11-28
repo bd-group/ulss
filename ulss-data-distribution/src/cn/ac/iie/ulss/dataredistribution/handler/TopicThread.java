@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package cn.ac.iie.ulss.dataredistribution.handler;
 
 import cn.ac.iie.ulss.dataredistribution.commons.GlobalVariables;

@@ -282,15 +282,12 @@ public class TransmitThread implements Runnable {
                                         if (vb) {
                                             synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
                                                 if (!chm.containsKey(keyinterval)) {
-                                                    Long version = 0L;
-                                                    String[] pa = rule.getPartType().split("\\|");
-                                                    version = Long.parseLong(pa[pa.length - 1]);
                                                     ArrayBlockingQueue abq = new ArrayBlockingQueue(2 * sendPoolSize);
                                                     chm.put(keyinterval, abq);
                                                     logger.debug("the ConcurrentHashMap for " + node.getName() + " for the keyinterval " + keyinterval + " is created");
                                                     abq.put(onedata);
                                                     ThreadGroup sendThreadPool = ((Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL)).get(topic);
-                                                    DataSenderThread dst = new DataSenderThread(abq, sendPoolSize, node, rule.getTopic(), rule.getServiceName(), sendThreadPool, rule, keyinterval, version);
+                                                    DataSenderThread dst = new DataSenderThread(abq, sendPoolSize, node, rule.getTopic(), rule.getServiceName(), sendThreadPool, rule, keyinterval,rule.getPartType() , rule.getKeywords());
                                                     Thread tdst = new Thread(dst);
                                                     tdst.start();
                                                 } else {

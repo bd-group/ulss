@@ -48,7 +48,8 @@ import org.apache.log4j.PropertyConfigurator;
  */
 public class SendToServiceThread implements Runnable {
 
-    Long version = 0L;
+    String partT = null;
+    String keywords = null;
     String sendIP = null;
     String topic = null;
     RNode node = null;
@@ -74,7 +75,7 @@ public class SendToServiceThread implements Runnable {
         logger = org.apache.log4j.Logger.getLogger(SendToServiceThread.class.getName());
     }
 
-    public SendToServiceThread(byte[] sendData, RNode node, String topic, String serviceName, Rule rule, String sendIP, String keyinterval, Long f_id, String road, int count, Long version) {
+    public SendToServiceThread(byte[] sendData, RNode node, String topic, String serviceName, Rule rule, String sendIP, String keyinterval, Long f_id, String road, int count, String partT , String keywords) {
         this.sendData = sendData;
         this.node = node;
         this.topic = topic;
@@ -85,7 +86,8 @@ public class SendToServiceThread implements Runnable {
         this.f_id = f_id;
         this.road = road;
         this.count = count;
-        this.version = version;
+        this.partT = partT;
+        this.keywords = keywords;
     }
 
     @Override
@@ -118,7 +120,6 @@ public class SendToServiceThread implements Runnable {
         Long getf_id = 0L;
         String getroad = "";
 
-        String partType = rule.getPartType();
         MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
         MetaStoreClient cli = mscp.getClient();
         try {
@@ -128,8 +129,8 @@ public class SendToServiceThread implements Runnable {
             int attemp = 0;
             while (attemp <= attempSize) {
                 try {
-                    lsf = icli.filterTableFiles(partType.split("\\|")[0], partType.split("\\|")[1], list);
-                    logger.info("get the filelist for " + topic + " " + partType.split("\\|")[0] + " " + partType.split("\\|")[1] + " " + list + " " + lsf);
+                    lsf = icli.filterTableFiles(partT.split("\\|")[0], partT.split("\\|")[1], list);
+                    logger.info("get the filelist for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + list + " " + lsf);
                     break;
                 } catch (Exception ex) {
                     logger.error("can not get the SFileList " + ex, ex);
@@ -305,8 +306,8 @@ public class SendToServiceThread implements Runnable {
             int attemp = 0;
             while (attemp <= attempSize) {
                 try {
-                    lsf = icli.filterTableFiles(rule.getPartType().split("\\|")[0], rule.getPartType().split("\\|")[1], list);
-                    logger.info("get the filelist for " + topic + " " + rule.getPartType().split("\\|")[0] + " " + rule.getPartType().split("\\|")[1] + " " + list + " " + lsf);
+                    lsf = icli.filterTableFiles(partT.split("\\|")[0], partT.split("\\|")[1], list);
+                    logger.info("get the filelist for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + list + " " + lsf);
                     break;
                 } catch (Exception ex) {
                     logger.error("can not get the SFileList " + ex, ex);
@@ -738,28 +739,28 @@ public class SendToServiceThread implements Runnable {
                 }
 
                 List<SplitValue> list = new ArrayList<SplitValue>();
-
+                String[] pa = partT.split("\\|");
                 for (int j = 1; j <= 2; j++) { //设置一级和二级划分值
                     if (j == 1) {
                         SplitValue sv1 = new SplitValue();
-                        sv1.setVerison(version);
+                        sv1.setVerison(Long.parseLong(pa[pa.length-1]));
                         sv1.setLevel(j);//如果是interval分区，设置两个特征值，一个是上限一个是下限
                         sv1.setValue("" + stime);
-                        sv1.setSplitKeyName(rule.getKeywords().split("\\|")[0]);
+                        sv1.setSplitKeyName(keywords.split("\\|")[0]);
                         list.add(sv1);
 
                         SplitValue sv2 = new SplitValue();
-                        sv2.setVerison(version);
+                        sv2.setVerison(Long.parseLong(pa[pa.length-1]));
                         sv2.setLevel(j);//如果是interval分区，设置两个特征值，一个是上限一个是下限
                         sv2.setValue("" + etime);
-                        sv2.setSplitKeyName(rule.getKeywords().split("\\|")[0]);
+                        sv2.setSplitKeyName(keywords.split("\\|")[0]);
                         list.add(sv2);
                     } else if (j == 2) {
                         SplitValue sv = new SplitValue();
-                        sv.setVerison(version);
+                        sv.setVerison(Long.parseLong(pa[pa.length-1]));
                         sv.setLevel(j);
                         sv.setValue(rule.getNodeUrls().size() + "-" + node.getName());//设置哈希键值
-                        sv.setSplitKeyName(rule.getKeywords().split("\\|")[1]);
+                        sv.setSplitKeyName(keywords.split("\\|")[1]);
                         list.add(sv);
                     }
                 }
@@ -872,27 +873,29 @@ public class SendToServiceThread implements Runnable {
                 valueToFile.put(topic + keyinterval + node.getName(), ob);
                 logger.info("choose the " + topic + " " + keyinterval + " " + node.getName() + ob);
 
-                Object[] o = new Object[7];
+                Object[] o = new Object[8];
                 o[0] = node;
                 o[1] = sendIP;
                 o[2] = keyinterval;
                 o[3] = f_id;
                 o[4] = road;
                 o[5] = count;
-                o[6] = version;
+                o[6] = partT;
+                o[7] = keywords;
                 ConcurrentHashMap<Map<Rule, byte[]>, Object[]> strandedDataSend = (ConcurrentHashMap<Map<Rule, byte[]>, Object[]>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_SEND);
                 Map<Rule, byte[]> m2 = new HashMap<Rule, byte[]>();
                 m2.put(rule, sendData);
                 strandedDataSend.put(m2, o);
             } else {
-                Object[] o = new Object[7];
+                Object[] o = new Object[8];
                 o[0] = node;
                 o[1] = newsendIP;
                 o[2] = keyinterval;
                 o[3] = newf_id;
                 o[4] = newroad;
                 o[5] = count;
-                o[6] = version;
+                o[6] = partT;
+                o[7] = keywords;
                 ConcurrentHashMap<Map<Rule, byte[]>, Object[]> strandedDataSend = (ConcurrentHashMap<Map<Rule, byte[]>, Object[]>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_SEND);
                 Map<Rule, byte[]> m2 = new HashMap<Rule, byte[]>();
                 m2.put(rule, sendData);
@@ -956,7 +959,7 @@ public class SendToServiceThread implements Runnable {
             attemp = 0;
             while (attemp <= attempSize) {
                 try {
-                    lng = icli.getTableNodeGroups(rule.getPartType().split("\\|")[0], rule.getPartType().split("\\|")[1]);
+                    lng = icli.getTableNodeGroups(partT.split("\\|")[0], partT.split("\\|")[1]);
                     break;
                 } catch (Exception ex) {
                     logger.error("can not get the List<nodeGroup>" + ex, ex);
@@ -983,8 +986,8 @@ public class SendToServiceThread implements Runnable {
 
             while (true) {
                 try {
-                    logger.info("begin to create file " + rule.getPartType().split("\\|")[0] + " " + rule.getPartType().split("\\|")[1] + " " + list);
-                    sf2 = icli.create_file_by_policy(cp, 2, rule.getPartType().split("\\|")[0], rule.getPartType().split("\\|")[1], list);
+                    logger.info("begin to create file " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + list);
+                    sf2 = icli.create_file_by_policy(cp, 2, partT.split("\\|")[0], partT.split("\\|")[1], list);
                     if (sf2 == null) {
                         logger.debug("can not create file for the topic " + topic + " " + keyinterval + " " + node.getName() + " from metastore ");
                         if (CFretryInterval < 30000) {
@@ -1004,14 +1007,14 @@ public class SendToServiceThread implements Runnable {
                     String nodeN = sf2.getLocations().get(0).getNode_name();
                     if (nodeN == null) {
                         if (nodeNames.isEmpty()) {
-                            logger.debug("thres is no node in the nodeGroups for " + rule.getPartType().split("\\|")[0] + rule.getPartType().split("\\|")[1]);
+                            logger.debug("thres is no node in the nodeGroups for " + partT.split("\\|")[0] +partT.split("\\|")[1]);
                             Thread.sleep(2000);
                             continue;
                         } else {
                             Random r = new Random();
                             int ran = r.nextInt(nodeNames.size());
                             if (nodeNames.get(ran) == null || nodeNames.get(ran).isEmpty()) {
-                                logger.debug("thres is null node in the nodeGroups for " + rule.getPartType().split("\\|")[0] + rule.getPartType().split("\\|")[1]);
+                                logger.debug("thres is null node in the nodeGroups for " + partT.split("\\|")[0] + partT.split("\\|")[1]);
                                 Thread.sleep(2000);
                                 continue;
                             }

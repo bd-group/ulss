@@ -16,6 +16,7 @@ import cn.ac.iie.ulss.dataredistribution.tools.MetaStoreClientPool;
 import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -23,7 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -37,11 +38,12 @@ import org.apache.log4j.PropertyConfigurator;
  *
  * @author evan yang
  */
-public class GetRuleFromDBThread implements Runnable {
+public class GetRuleFromDB {
 
     static Logger logger = null;
     String time = null;
     ConcurrentHashMap<String, ArrayList<Rule>> topicToRules = null;
+    ArrayList<String> transmitrule = null;
     Map<RNode, Integer> nodeToThreadNum = (Map<RNode, Integer>) RuntimeEnv.getParam(GlobalVariables.NODE_TO_THREADNUM);
     public static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private SimpleDaoImpl simpleDao;
@@ -49,19 +51,15 @@ public class GetRuleFromDBThread implements Runnable {
 
     static {
         PropertyConfigurator.configure("log4j.properties");
-        logger = Logger.getLogger(GetRuleFromDBThread.class.getName());
+        logger = Logger.getLogger(GetRuleFromDB.class.getName());
     }
 
-    @Override
-    public void run() {
+    public void start() {
         topicToRules = (ConcurrentHashMap<String, ArrayList<Rule>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_RULES);
-        try {
-            getRules(); //get rules from the oracle
-        } catch (Exception ex) {
-            logger.error(ex,ex);
-            return;
-        }
+        transmitrule = (ArrayList<String>) RuntimeEnv.getParam(GlobalVariables.TRANSMITRULE);
         
+        getRules(); //get rules from the oracle
+
         MessageTransferStation.init(topicToRules); // initialise the message transfer station 
 
         Set topicset = topicToRules.keySet();
@@ -74,21 +72,26 @@ public class GetRuleFromDBThread implements Runnable {
         }
 
         GetMessageFromMetaStore gmfms = new GetMessageFromMetaStore(); // getting the change message from the metastore
-        Thread tgmfms = new Thread();
+        Thread tgmfms = new Thread(gmfms);
         tgmfms.start();
+
+        DetectTransmitRule dtr = new DetectTransmitRule();
+        Thread tdtr = new Thread(dtr);
+        tdtr.start();
     }
-    
+
     /**
      *
      * get rules from the oracle
      */
-    private void getRules() throws Exception {
+    private void getRules() {
         logger.info("getting data transmit rule from oracle...");
         String dbCluster = (String) RuntimeEnv.getParam(RuntimeEnv.DB_CLUSTER);
         simpleDao = SimpleDaoImpl.getDaoInstance(dbCluster);
-        String sql = "select * from data_transmitrule";//datatransmit_rules";
+        String sql = "select topic,service,nodeurls,type,keywords,filters,valid,region from data_transmitrule";//datatransmit_rules";
         List<List<String>> newRs = simpleDao.queryForList(sql);
-
+        String[] re = ((String) RuntimeEnv.getParam(RuntimeEnv.REGION)).split("\\|");
+        List<String> regions = Arrays.asList(re);
         for (List<String> r : newRs) {
             String valid = r.get(6);
 
@@ -96,44 +99,53 @@ public class GetRuleFromDBThread implements Runnable {
                 logger.info("a rule has no valid");
             } else if (valid.equals("0")) {
             } else if (valid.equals("1")) {
-                String topic = r.get(0).trim();
+
+                String topic = r.get(0);
 
                 if (topic == null || topic.equals("")) {
-                    throw new Exception("the topic in the rule is null or wrong");
+                    logger.error("the topic in the rule is null or wrong " + topic);
+                    continue;
                 } else {
                     if (!topic.matches("[^/\\\\\\\\<>*?|\\\"]+")) {
-                        throw new Exception("the name of topic is valid , it should include /\\<>*?|\" ");
+                        logger.error("the name of topic is valid , it should include /\\<>*?|\" " + topic);
+                        continue;
                     }
                 }
 
-                String serviceName = r.get(1).trim();
+                String serviceName = r.get(1);
 
                 if (serviceName == null || serviceName.equals("")) {
-                    throw new Exception("the serviceName in the rule is null or wrong");
+                    logger.error("the serviceName in the rule is null or wrong " + topic);
+                    continue;
                 } else {
                     if (!serviceName.matches("[^/\\\\\\\\<>*?|\\\"]+")) {
-                        throw new Exception("the name of serviceName is valid , it should include /\\<>*?|\" ");
+                        logger.error("the name of serviceName is valid , it should include /\\<>*?|\" ");
+                        continue;
                     }
                 }
 
-                String nodeUrls = r.get(2).trim();
+                String nodeUrls = r.get(2);
 
                 if (nodeUrls == null || nodeUrls.equals("")) {
-                    throw new Exception("the nodeUrls in the rule is null or wrong");
+                    logger.error("the nodeUrls in the rule is null or wrong");
+                    continue;
                 } else {
                     if (!nodeUrls.endsWith("/")) {
-                        throw new Exception("the name of nodeUrls is valid , it should include /\\<>*?|\" ");
+                        logger.error("the name of nodeUrls is valid , it should include /\\<>*?|\" ");
+                        continue;
                     }
                 }
 
                 int type = -1;
                 try {
-                    type = Integer.parseInt(r.get(3).trim());
+                    type = Integer.parseInt(r.get(3));
                     if (type != 0 && type != 1 && type != 2 && type != 3 && type != 4) {
-                        throw new Exception("the rule_type in the rule is null or wrong");
+                        logger.error("the rule_type in the rule is null or wrong");
+                        continue;
                     }
                 } catch (Exception e) {
-                    throw new Exception("the rule_type in the rule is null or wrong" + e, e);
+                    logger.error("the rule_type in the rule is null or wrong " + topic + e, e);
+                    continue;
                 }
 
                 String keywords = r.get(4);
@@ -144,6 +156,11 @@ public class GetRuleFromDBThread implements Runnable {
                 String filters = r.get(5);
                 if (filters != null) {
                     filters = filters.trim();
+                }
+
+                String region = r.get(7);
+                if (region != null) {
+                    region = region.trim();
                 }
 
                 ConcurrentHashMap<String, AtomicLong> ruleToCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_COUNT);
@@ -157,6 +174,7 @@ public class GetRuleFromDBThread implements Runnable {
                 String partType = null;
 
                 if (type == 0 || type == 1 || type == 2 || type == 3) {
+                    transmitrule.add(topic + serviceName);
                     IPList = nodeUrls.split("\\;");
                     ArrayList nurl = new ArrayList<RNode>();
                     for (int i = 0; i < IPList.length; i++) {
@@ -168,7 +186,7 @@ public class GetRuleFromDBThread implements Runnable {
                     DynamicAllocate dynamicallocate = new DynamicAllocate();
                     dynamicallocate.setNodes(nurl);
                     nodelocator = dynamicallocate.getMD5NodeLocator();
-                    
+
                     Rule s = new Rule(topic, serviceName, nurl, type, keywords, filters, nodelocator, IPList, nodeToIP, deadIP, partType);
                     Map<Rule, String> ruleToControl = (Map<Rule, String>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_CONTROL);
                     ruleToControl.put(s, "start");
@@ -181,134 +199,33 @@ public class GetRuleFromDBThread implements Runnable {
                         set.add(s);
                         topicToRules.put(topic, set);
                     }
-                } //                else if (type == 100) {
-                //                    IPList = nodeUrls.split("\\;");
-                //                    String metaStoreClient = (String) RuntimeEnv.getParam("metaStoreClient");
-                //                    String[] part = metaStoreClient.split("\\:");
-                //                    partType = part[0] + ":" + part[1] + ":hash";
-                //                    ArrayList nurl = new ArrayList<RNode>();
-                //
-                //                    for (int i = 0; i < Integer.parseInt(part[2]); i++) {
-                //                        RNode node = new RNode("" + i);
-                //                        nodeToThreadNum.put(node, 0);
-                //                        nurl.add(node);
-                //                    }
-                //                    DynamicAllocate dynamicallocate = new DynamicAllocate();
-                //                    dynamicallocate.setNodes(nurl);
-                //                    nodelocator = dynamicallocate.getMD5NodeLocator();
-                //
-                //                    if (IPList.length > 0) {
-                //                        ArrayList<String> ips = new ArrayList<String>();
-                //                        for (int p = 0; p < IPList.length; p++) {
-                //                            if (!deadIP.contains(IPList[p])) {
-                //                                ips.add(IPList[p]);
-                //                            }
-                //                        }
-                //                        for (int i = 0; i < nurl.size(); i++) {
-                //                            while (true) {
-                //                                if (deadIP.size() >= IPList.length) {
-                //                                    logger.info("all the IPList cann't be connectted");
-                //                                    break;
-                //                                } else if (ips.isEmpty()) {
-                //                                    ips = new ArrayList<String>();
-                //                                    for (int p = 0; p < IPList.length; p++) {
-                //                                        if (!deadIP.contains(IPList[p])) {
-                //                                            ips.add(IPList[p]);
-                //                                        }
-                //                                    }
-                //                                } else {
-                //                                    Random ran = new Random();
-                //                                    //System.out.println(ips.size());
-                //                                    int next = ran.nextInt(ips.size());
-                //                                    Date date = new Date();
-                //                                    if ("'MI'".equalsIgnoreCase(part[0])) {   //以分钟为单位
-                //                                        date.setSeconds(0);
-                //                                        date.setMinutes(date.getMinutes() % Integer.parseInt(part[1]));
-                //                                    } else if ("'H'".equalsIgnoreCase(part[0])) {    //以小时为单位
-                //                                        date.setSeconds(0);
-                //                                        date.setMinutes(0);
-                //                                        date.setHours(date.getHours() % Integer.parseInt(part[1]));
-                //                                    } else if ("'D'".equalsIgnoreCase(part[0])) { //以天为单位
-                //                                        date.setSeconds(0);
-                //                                        date.setMinutes(0);
-                //                                        date.setHours(0);
-                //                                        date.setDate(date.getDate() % Integer.parseInt(part[1]));
-                //                                    } else {
-                //                                        throw new RuntimeException("now the partition unit is not support, it only supports --- D day,H hour,MI minute");
-                //                                    }
-                //                                    time = GetRuleFromDBThread.dateFormat.format(date);
-                //                                    SendControl sc = new SendControl(ips.get(next), "start", "db1", time, "" + i);
-                //                                    HttpResponse hr = sc.send();
-                //                                    if (hr != null) {
-                //                                        ByteArrayOutputStream out = new ByteArrayOutputStream();
-                //                                        try {
-                //                                            hr.getEntity().writeTo(out);
-                //                                        } catch (IOException ex) {
-                //                                            logger.info(ex, ex);
-                //                                        }
-                //                                        String resonseEn = new String(out.toByteArray());
-                //                                        if ("-1".equals(resonseEn.split("[\n]")[0])) {
-                //                                            logger.error(resonseEn.split("[\n]")[1]);
-                //                                            deadIP.add(ips.get(next));
-                //                                            ips.remove(next);
-                //                                            continue;
-                //                                        } else {
-                //                                            nodeToIP.put((RNode) nurl.get(i), ips.get(next));
-                //                                            logger.info(((RNode) nurl.get(i)).getName() + ": " + ips.get(next));
-                //                                            ips.remove(next);
-                //                                            break;
-                //                                        }
-                //                                    } else {
-                //                                        logger.info("cann't connect to the " + ips.get(next));
-                //                                        deadIP.add(ips.get(next));
-                //                                        ips.remove(next);
-                //                                        continue;
-                //                                    }
-                //                                }
-                //                            }
-                //                        }
-                //                    }
-                //
-                //                    Rule s = new Rule(topic, serviceName, nurl, type, keywords, filters, nodelocator, IPList, nodeToIP, deadIP, partType);
-                //                    Map<Rule, String> ruleToControl = (Map<Rule, String>) RuntimeEnv.getParam("ruleToControl");
-                //                    ruleToControl.put(s, "start");
-                //
-                //                    updateNodeToUrls untu = new updateNodeToUrls(s);
-                //                    Thread t = new Thread(untu);
-                //                    t.start();
-                //
-                //                    if (topicToRules.containsKey(topic)) {
-                //                        Set<Rule> set = (Set<Rule>) topicToRules.get(topic);
-                //                        set.add(s);
-                //                    } else {
-                //                        Set<Rule> set = new HashSet<Rule>();
-                //                        set.add(s);
-                //                        topicToRules.put(topic, set);
-                //                    }
-                //                } 
-                else if (type == 4) {
-                    Rule s = null;
-                    s = getFromMetaStore(topic, serviceName, nodeUrls, type, keywords, filters);
+                } else if (type == 4) {
+                    if (regions.contains(region)) {
+                        Rule s = null;
+                        s = getFromMetaStore(topic, serviceName, nodeUrls, type, keywords, filters, region);
 
-                    if (s != null) {
-                        Map<Rule, String> ruleToControl = (Map<Rule, String>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_CONTROL);
-                        ruleToControl.put(s, "start");
-
-                        if (topicToRules.containsKey(topic)) {
-                            ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(topic);
-                            set.add(s);
+                        if (s != null) {
+                            Map<Rule, String> ruleToControl = (Map<Rule, String>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_CONTROL);
+                            ruleToControl.put(s, "start");
+                            transmitrule.add(topic + serviceName);
+                            if (topicToRules.containsKey(topic)) {
+                                ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(topic);
+                                set.add(s);
+                            } else {
+                                ArrayList<Rule> set = new ArrayList<Rule>();
+                                set.add(s);
+                                topicToRules.put(topic, set);
+                            }
                         } else {
-                            ArrayList<Rule> set = new ArrayList<Rule>();
-                            set.add(s);
-                            topicToRules.put(topic, set);
+                            logger.error("getFromMetaStore error");
+                            continue;
                         }
                     } else {
-                        logger.error("getFromMetaStore error");
-                        return;
+                        logger.info("this rule's region will be not in the regions " + region);
                     }
                 } else {
                     logger.error("the type in the rule " + type + "is wrong!");
-                    return;
+                    continue;
                 }
             } else {
                 logger.error("a valid is wrong");
@@ -322,7 +239,9 @@ public class GetRuleFromDBThread implements Runnable {
      *
      * get rules from the metastore
      */
-    private Rule getFromMetaStore(String topic, String serviceName, String nodeUrls, int type, String keywords, String filters) {
+    private Rule getFromMetaStore(String topic, String serviceName, String nodeUrls, int type, String keywords, String filters, String region) {
+        keywords = "";
+        filters = "";
         logger.info("getting the part_rule from the metaStore");
         Rule r = null;
         ArrayList nurl = new ArrayList<RNode>();
@@ -331,14 +250,19 @@ public class GetRuleFromDBThread implements Runnable {
         Map<RNode, String> nodeToIP = new HashMap<RNode, String>();
         ArrayList<String> deadIP = new ArrayList<String>();
         String partType = null;
-        String metaStoreClientString = (String) RuntimeEnv.getParam(RuntimeEnv.METASTORE_CLIENT_STRING);
-        String[] m = metaStoreClientString.split("\\:");
-
-        MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(RuntimeEnv.METASTORE_CLIENT_POOL_SIZE);
+        MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
+        if (mscp == null) {
+            String metaStoreClientString = (String) RuntimeEnv.getParam("metaStoreClientString");
+            int metaStoreClientPoolSize = (Integer) RuntimeEnv.getParam("metaStoreClientPoolSize");
+            HiveConf hc = new HiveConf();
+            hc.set("hive.metastore.uris", "thrift://" + metaStoreClientString);
+            MetaStoreClientPool newmscp = new MetaStoreClientPool(metaStoreClientPoolSize, hc);
+            RuntimeEnv.addParam(GlobalVariables.METASTORE_CLIENT_POOL, newmscp);
+            mscp = newmscp;
+        }
         MetaStoreClientPool.MetaStoreClient cli = mscp.getClient();
         try {
             IMetaStoreClient icli = cli.getHiveClient();
-
             logger.info("connected the metastore");
             Table bf_dxx = null;
 
@@ -347,7 +271,7 @@ public class GetRuleFromDBThread implements Runnable {
             int attemp = 0;
             while (attemp <= attempSize) {
                 try {
-                    bf_dxx = icli.getTable(m[2], topicToTBName.get(topic));
+                    bf_dxx = icli.getTable(region, topicToTBName.get(topic));
                     List<FieldSchema> allSplitKeys = bf_dxx.getFileSplitKeys();
                     List<FieldSchema> splitKeys = new ArrayList<FieldSchema>();
 
@@ -381,6 +305,9 @@ public class GetRuleFromDBThread implements Runnable {
 
                     if (pis.size() == 2) {
                         StringBuilder tmps = new StringBuilder();
+                        tmps.append(region);
+                        tmps.append("|");
+                        tmps.append(topicToTBName.get(topic));
                         String unit = null;
                         String interval = null;
                         for (PartitionFactory.PartitionInfo pinfo : pis) {
@@ -391,20 +318,21 @@ public class GetRuleFromDBThread implements Runnable {
 
                                 if ("interval".equalsIgnoreCase(part_type_l1)) {
                                     if (pis.get(0).getArgs().size() < 2) {
-                                        throw new RuntimeException("get the table's partition unit and interval error");
+                                        logger.error("get the table's partition unit and interval error");
+                                        return null;
                                     } else {
                                         //Y year,M mponth,W week,D day,H hour，M minute。 现在只支持H D W， 因为月和年的时间并不是完全确定的，因此无法进行精确的分区，暂时不支持；分钟级的单位太小，暂时也不支持
                                         List<String> paras = pinfo.getArgs();
                                         unit = paras.get(0);
                                         interval = paras.get(1);
-                                        tmps.append("interval|");
+                                        tmps.append("|interval|");
                                         tmps.append(unit);
                                         tmps.append("|");
                                         tmps.append(interval);
                                     }
                                 } else {
-                                    logger.error("this system only support the interval for the first partition");
-                                    throw new Exception("this system only support the interval for the first partition");
+                                    logger.error(topic + " this system only support the interval for the first partition");
+                                    return null;
                                 }
                             }
 
@@ -422,11 +350,12 @@ public class GetRuleFromDBThread implements Runnable {
                                     DynamicAllocate dynamicallocate = new DynamicAllocate();
                                     dynamicallocate.setNodes(nurl);
                                     nodelocator = dynamicallocate.getHashCodeNodeLocator();
-                                    tmps.append("|hash");
+                                    tmps.append("|hash|");
+                                    tmps.append(version);
                                     partType = tmps.toString();
                                 } else {
-                                    logger.error("this system only support the hash for the second partition");
-                                    throw new Exception("this system only support the hash for the second partition");
+                                    logger.error(topic + " this system only support the hash for the second partition");
+                                    return null;
                                 }
                             }
                         }
@@ -434,15 +363,15 @@ public class GetRuleFromDBThread implements Runnable {
                         keywords = split_name_l1 + "|" + split_name_l2;
                         IPList = new String[1];
                         IPList[0] = nodeUrls;
-                        logger.info("the partitionRules is " + partType + " " + keywords + " " + IPList[0]);
+                        logger.info(topic + " the partitionRules is " + partType + " " + keywords + " " + IPList[0]);
                         r = new Rule(topic, serviceName, nurl, type, keywords, filters, nodelocator, IPList, nodeToIP, deadIP, partType);
                         break;
                     } else {
-                        logger.error("this system only support the two levelpartitions");
+                        logger.error(topic + " this system only support the two levelpartitions");
                         return null;
                     }
                 } catch (Exception ex) {
-                    logger.error(ex, ex);
+                    logger.error(region + "　" + topic + " " + topicToTBName.get(topic) + ex, ex);
                     try {
                         icli.reconnect();
                     } catch (MetaException ex1) {

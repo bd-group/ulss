@@ -64,8 +64,7 @@ public class MessageTransferStation {
                             ArrayBlockingQueue abq = new ArrayBlockingQueue(sendPoolSize);
                             messageTransferStation.put(node, abq);
                             String value = null;
-                            Long version = 0L;
-                            DataSenderThread dst = new DataSenderThread(abq, sendPoolSize, node, rule.getTopic(), rule.getServiceName(), sendThreadPool, rule, value, version);
+                            DataSenderThread dst = new DataSenderThread(abq, sendPoolSize, node, rule.getTopic(), rule.getServiceName(), sendThreadPool, rule, value, rule.getPartType() , rule.getKeywords());
                             Thread tdst = new Thread(dst);
                             tdst.start();
                         }
@@ -102,8 +101,7 @@ public class MessageTransferStation {
                     ArrayBlockingQueue abq = new ArrayBlockingQueue(sendPoolSize);
                     messageTransferStation.put(node, abq);
                     String value = null;
-                    Long version = 0L;
-                    DataSenderThread dst = new DataSenderThread(abq, sendPoolSize, node, rule.getTopic(), rule.getServiceName(), sendThreadPool, rule, value, version);
+                    DataSenderThread dst = new DataSenderThread(abq, sendPoolSize, node, rule.getTopic(), rule.getServiceName(), sendThreadPool, rule, value, rule.getPartType() ,rule.getKeywords());
                     Thread tdst = new Thread(dst);
                     tdst.start();
                 }
