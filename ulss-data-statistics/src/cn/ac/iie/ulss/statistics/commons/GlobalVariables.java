@@ -16,6 +16,7 @@ import org.apache.log4j.PropertyConfigurator;
  */
 public class GlobalVariables {
 
+    public static final String SYN_COUNT = "synCount";
     public static final String MQ_TO_COUNT = "MQToCount";
     public static final String MQ_TO_SCHEMACONTENT = "MQToSchemaContent";
     public static final String MQ_TO_SCHEMANAME = "MQToSchemaName";
@@ -35,6 +36,9 @@ public class GlobalVariables {
      * init the Global Variables
      */
     public static void initialize() {
+
+        byte[] synCount = new byte[0];
+        RuntimeEnv.addParam(SYN_COUNT, synCount);
 
         logger.info("setting the MQToCount to the Global Variables");
         HashMap<String, HashMap<String, AtomicLong[]>> MQToCount = new HashMap<String, HashMap<String, AtomicLong[]>>();
