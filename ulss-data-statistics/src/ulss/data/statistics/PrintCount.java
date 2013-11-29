@@ -25,6 +25,7 @@ import org.apache.log4j.PropertyConfigurator;
  */
 public class PrintCount implements Runnable {
 
+    long group = 0L;
     public SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     static Logger logger = null;
 
@@ -42,6 +43,8 @@ public class PrintCount implements Runnable {
             } catch (InterruptedException ex) {
                 logger.error(ex, ex);
             }
+
+            group++;
 
             logger.info("print the count ");
             String dataDir = (String) RuntimeEnv.getParam(RuntimeEnv.DATA_DIR);
@@ -82,9 +85,9 @@ public class PrintCount implements Runnable {
                         String tmptime = dateFormat.format(d);
                         AtomicLong[] al = timeToCount.get(tmptime);
                         if (al != null) {
-                            bos.write((mq + " " + tmptime + " count : " + al[0]).getBytes());
+                            bos.write((group + " " + mq + " " + tmptime + " count : " + al[0]).getBytes());
                         } else {
-                            bos.write((mq + " " + tmptime + " count : 0").getBytes());
+                            bos.write((group + " " + mq + " " + tmptime + " count : 0").getBytes());
                         }
                         d.setHours(d.getHours() - 1);
                         bos.write('\n');
@@ -106,7 +109,7 @@ public class PrintCount implements Runnable {
                         }
                         dh.setHours(0);
                         String tmpd = dateFormat.format(dh);
-                        bos.write((mq + " " + tmpd + " count : " + dcount).getBytes());
+                        bos.write((group + " " + mq + " " + tmpd + " count : " + dcount).getBytes());
                         bos.write('\n');
                         dh.setDate(dh.getDate() - 1);
                     }

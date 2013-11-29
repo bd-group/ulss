@@ -68,6 +68,12 @@ public class SplitAndGet {
         docsSchemaContent = (String) RuntimeEnv.getParam(GlobalVariables.DOCS_SCHEMA_CONTENT);
         msgSchemaName = ((Map<String, String>) RuntimeEnv.getParam(GlobalVariables.MQ_TO_SCHEMANAME)).get(MQ);
 
+    }
+
+    public void count(Message message) {
+        logger.info("check one message");
+        byte[] msg = message.getData();
+
         protocoldocs = Protocol.parse(docsSchemaContent);
         docsSchema = protocoldocs.getType(GlobalVariables.DOCS);
         docsreader = new GenericDatumReader<GenericRecord>(docsSchema);
@@ -76,21 +82,14 @@ public class SplitAndGet {
         msgSchema = protocolMsg.getType(msgSchemaName);
         msgreader = new GenericDatumReader<GenericRecord>(msgSchema);
 
-
-    }
-
-    public void count(Message message) {
-        byte[] msg = message.getData();
-
         docsin = new ByteArrayInputStream(msg);
         docsdecoder = DecoderFactory.get().binaryDecoder(docsin, null);
         try {
             docsGr = docsreader.read(null, docsdecoder);
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             logger.info((new Date()) + " split the data package from the topic " + MQ + " " + ex, ex);
             return;
         }
-
         msgSet = (GenericData.Array<GenericRecord>) docsGr.get(GlobalVariables.DOC_SET);
         msgitor = msgSet.iterator();
 
@@ -101,7 +100,8 @@ public class SplitAndGet {
             GenericRecord dxxRecord;
             try {
                 dxxRecord = msgreader.read(null, msgbd);
-            } catch (IOException ex) {
+            } catch (Exception ex) {
+
                 logger.info((new Date()) + " split the one data from the topic " + MQ + " in the dataPool wrong " + ex, ex);
                 continue;
             }
@@ -120,16 +120,19 @@ public class SplitAndGet {
                 dtime.setTime(datatime * 1000);
                 dtime.setMinutes(0);
                 dtime.setSeconds(0);
-                String dt =  dateFormat.format(dtime);
-                if(timeToCount.containsKey(dt)){
-                    AtomicLong[] al = timeToCount.get(dt);
-                    al[1] = new AtomicLong(1);
-                    al[0].incrementAndGet();
-                }else{
-                    AtomicLong[] al = new AtomicLong[2];
-                    al[0] = new AtomicLong(1);
-                    al[1] = new AtomicLong(1);
-                    timeToCount.put(dt, al);
+                String dt = dateFormat.format(dtime);
+
+                synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_COUNT)) {
+                    if (timeToCount.containsKey(dt)) {
+                        AtomicLong[] al = timeToCount.get(dt);
+                        al[1] = new AtomicLong(1);
+                        al[0].incrementAndGet();
+                    } else {
+                        AtomicLong[] al = new AtomicLong[2];
+                        al[0] = new AtomicLong(1);
+                        al[1] = new AtomicLong(1);
+                        timeToCount.put(dt, al);
+                    }
                 }
             }
         }

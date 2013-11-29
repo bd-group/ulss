@@ -60,7 +60,8 @@ public class DataAccepterThread implements Runnable {
             sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
 
             ConsumerConfig cc = new ConsumerConfig("sta_" + MQ + "_consumer");
-
+            cc.setFetchRunnerCount(1);
+            
             final MessageConsumer consumer = sessionFactory.createConsumer(cc);
 
             logger.info("init the consumer ok,begin receive data from the topic " + this.MQ);
