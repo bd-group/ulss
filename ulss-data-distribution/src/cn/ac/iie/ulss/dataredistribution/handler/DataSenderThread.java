@@ -7,7 +7,6 @@ package cn.ac.iie.ulss.dataredistribution.handler;
 import cn.ac.iie.ulss.dataredistribution.commons.GlobalVariables;
 import cn.ac.iie.ulss.dataredistribution.commons.RuntimeEnv;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
-import static cn.ac.iie.ulss.dataredistribution.handler.DataSenderThread.logger;
 import cn.ac.iie.ulss.dataredistribution.tools.MessageTransferStation;
 import cn.ac.iie.ulss.dataredistribution.tools.MetaStoreClientPool;
 import cn.ac.iie.ulss.dataredistribution.tools.MetaStoreClientPool.MetaStoreClient;
@@ -83,7 +82,7 @@ public class DataSenderThread implements Runnable {
         logger = org.apache.log4j.Logger.getLogger(DataSenderThread.class.getName());
     }
 
-    public DataSenderThread(ArrayBlockingQueue abq, Integer sendPoolSize, RNode node, String topic, String serviceName, ThreadGroup sendThreadPool, Rule rule, String keyinterval, String partT , String keywords) {
+    public DataSenderThread(ArrayBlockingQueue abq, Integer sendPoolSize, RNode node, String topic, String serviceName, ThreadGroup sendThreadPool, Rule rule, String keyinterval, String partT, String keywords) {
         sendQueue = abq;
         this.sendPoolSize = sendPoolSize;
         this.node = node;
@@ -160,7 +159,7 @@ public class DataSenderThread implements Runnable {
                         }
                     }
 
-                    SendToServiceThread sendT = new SendToServiceThread(sendData, node, topic, serviceName, rule, sendIP, keyinterval, f_id, road, count, partT , keywords);
+                    SendToServiceThread sendT = new SendToServiceThread(sendData, node, topic, serviceName, rule, sendIP, keyinterval, f_id, road, count, partT, keywords);
                     while (sendThreadPool.activeCount() >= sendThreadPoolSize) {
                         logger.debug("the sendThreadPool for " + topic + " " + keyinterval + " " + node.getName() + " is full...");
                         try {
@@ -211,21 +210,23 @@ public class DataSenderThread implements Runnable {
         GenericArray docSet = new GenericData.Array<GenericRecord>((sendPoolSize), docs.getField(GlobalVariables.DOC_SET).schema());
         count = 0;
         long stime = System.currentTimeMillis();
+        long etime = System.currentTimeMillis();
         while (count < sendPoolSize) {
             byte[] data = (byte[]) abq.poll();
             if (data != null) {
                 docSet.add(ByteBuffer.wrap(data));
                 count++;
+                stime = System.currentTimeMillis();
             } else {
+                etime = System.currentTimeMillis();
+                if ((etime - stime) >= (Integer) RuntimeEnv.getParam(RuntimeEnv.SEND_TIME_OUT)) {
+                    break;
+                }
                 try {
-                    Thread.sleep(50);
+                    Thread.sleep(100);
                 } catch (InterruptedException ex) {
                     logger.error(ex, ex);
                 }
-            }
-            long etime = System.currentTimeMillis();
-            if ((etime - stime) >= (Integer) RuntimeEnv.getParam(RuntimeEnv.SEND_TIME_OUT)) {
-                break;
             }
         }
 
@@ -663,27 +664,27 @@ public class DataSenderThread implements Runnable {
                 } catch (Exception ex) {
                     logger.error(ex, ex);
                 }
-                
+
                 String[] pa = partT.split("\\|");
                 List<SplitValue> list = new ArrayList<SplitValue>();
                 for (int j = 1; j <= 2; j++) { //设置一级和二级划分值
                     if (j == 1) {
                         SplitValue sv1 = new SplitValue();
-                        sv1.setVerison(Long.parseLong(pa[pa.length-1]));
+                        sv1.setVerison(Long.parseLong(pa[pa.length - 1]));
                         sv1.setLevel(j);//如果是interval分区，设置两个特征值，一个是上限一个是下限
                         sv1.setValue("" + stime);
                         sv1.setSplitKeyName(keywords.split("\\|")[0]);
                         list.add(sv1);
 
                         SplitValue sv2 = new SplitValue();
-                        sv2.setVerison(Long.parseLong(pa[pa.length-1]));
+                        sv2.setVerison(Long.parseLong(pa[pa.length - 1]));
                         sv2.setLevel(j);//如果是interval分区，设置两个特征值，一个是上限一个是下限
                         sv2.setValue("" + etime);
                         sv2.setSplitKeyName(keywords.split("\\|")[0]);
                         list.add(sv2);
                     } else if (j == 2) {
                         SplitValue sv = new SplitValue();
-                        sv.setVerison(Long.parseLong(pa[pa.length-1]));
+                        sv.setVerison(Long.parseLong(pa[pa.length - 1]));
                         sv.setLevel(j);
                         sv.setValue(rule.getNodeUrls().size() + "-" + node.getName());//设置哈希键值
                         sv.setSplitKeyName(keywords.split("\\|")[1]);
@@ -1058,7 +1059,7 @@ public class DataSenderThread implements Runnable {
                             }
                         }
                     }
-                }catch (Exception ex) {
+                } catch (Exception ex) {
                     logger.error("cannot create the file for " + topic + " " + keyinterval + " " + node.getName() + ex, ex);
                     rcmetastore(icli);
                     if (CFretryInterval < 30000) {

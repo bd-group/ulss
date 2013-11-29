@@ -86,7 +86,7 @@ public class WriteToFileThread implements Runnable {
                 String f = fsmit.getName();
                 Date d = new Date();
                 String fb = format.format(d) + "_" + f + ".old";
-                
+
                 if (fsmit.exists()) {
                     logger.info("rename the file " + fsmit.getName());
                     fsmit.renameTo(new File(dataDir + "backup/" + fb));
@@ -102,6 +102,7 @@ public class WriteToFileThread implements Runnable {
                         return;
                     }
                     long stime = System.currentTimeMillis();
+                    long etime = System.currentTimeMillis();
                     int count = 0;
                     while (count < (dataPoolSize / writeToFileThread)) {
                         Message message = null;
@@ -149,10 +150,12 @@ public class WriteToFileThread implements Runnable {
                                     logger.error(ex, ex);
                                 }
                             }
-                        }
-                        long etime = System.currentTimeMillis();
-                        if ((etime - stime) >= acceptTimeout) {
-                            break;
+                            stime = System.currentTimeMillis();
+                        } else {
+                            etime = System.currentTimeMillis();
+                            if ((etime - stime) >= acceptTimeout) {
+                                break;
+                            }
                         }
                     }
                     try {

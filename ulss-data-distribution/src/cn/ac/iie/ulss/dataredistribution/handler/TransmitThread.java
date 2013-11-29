@@ -449,7 +449,7 @@ public class TransmitThread implements Runnable {
             } else {
                 ArrayBlockingQueue sdQueue = new ArrayBlockingQueue(5000);
                 UnvalidDataStore.put(rule, sdQueue);
-                StoreUnvalidDataStoreDataThread sotdsdt = new StoreUnvalidDataStoreDataThread(sdQueue, rule);
+                StoreUnvalidDataThread sotdsdt = new StoreUnvalidDataThread(sdQueue, rule);
                 Thread tsotdsdt = new Thread(sotdsdt);
                 tsotdsdt.start();
                 try {

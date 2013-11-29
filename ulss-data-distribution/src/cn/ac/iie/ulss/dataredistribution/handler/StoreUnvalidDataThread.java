@@ -12,8 +12,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileWriter;
@@ -42,12 +45,13 @@ public class StoreUnvalidDataThread implements Runnable {
     String msgSchemaName = null;
     String docsSchemaContent = null;
     int size = 100;
-    static org.apache.log4j.Logger logger = null;
     String dataDir = (String) RuntimeEnv.getParam(RuntimeEnv.DATA_DIR);
+    static org.apache.log4j.Logger logger = null;
+    SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmss");
 
     static {
         PropertyConfigurator.configure("log4j.properties");
-        logger = org.apache.log4j.Logger.getLogger(StoreStrandedDataThread.class.getName());
+        logger = org.apache.log4j.Logger.getLogger(StoreUnvalidDataThread.class.getName());
     }
 
     public StoreUnvalidDataThread(ArrayBlockingQueue sdQueue, Rule rule) {
@@ -55,6 +59,7 @@ public class StoreUnvalidDataThread implements Runnable {
         this.rule = rule;
     }
 
+    @Override
     public void run() {
         String topic = rule.getTopic();
         String service = rule.getServiceName();
@@ -69,110 +74,138 @@ public class StoreUnvalidDataThread implements Runnable {
         DatumReader<GenericRecord> dxreader = new GenericDatumReader<GenericRecord>(docsschema);
 
         int count = 0;
-        int co = 0;
-        File out = new File(dataDir + "unvalid");
+        int count2 = 0;
         File f = null;
+        File out = new File(dataDir + "unvaliddata");
+
         while (true) {
-
-            synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_DIR)) {
-                if (!out.exists() && !out.isDirectory()) {
-                    out.mkdirs();
-                    logger.info("create the directory " + dataDir + "unvalid");
-                }
-            }
-
-            f = new File(dataDir + "unvalid/" + topic + service + ".uv");
-            if (f.exists()) {
-                try {
-                    dataFileWriter.appendTo(f);
-                } catch (IOException ex) {
-                    logger.error(ex, ex);
-                }
-            } else {
-                try {
-                    logger.info("create the file " + f.getName() + " for the topic " + topic + " and service " + service);
-                    dataFileWriter.create(docsschema, f);
-                } catch (IOException ex) {
-                    logger.error(ex, ex);
-                }
-            }
-
-            count = 0;
-            while (count < 1000) {
-                if (!sdQueue.isEmpty()) {
-                    byte[] sendData = pack(sdQueue);
-                    if (sendData == null) {
-                        continue;
+            if (!sdQueue.isEmpty()) {
+                count2 = 0;
+                synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_DIR)) {
+                    if (!out.exists() && !out.isDirectory()) {
+                        out.mkdirs();
+                        logger.info("create the directory " + dataDir + "unvaliddata");
                     }
-                    count++;
+                }
 
-                    ByteArrayInputStream dxin = new ByteArrayInputStream(sendData);
-                    BinaryDecoder dxdecoder = DecoderFactory.get().binaryDecoder(dxin, null);
-                    GenericRecord dxr;
+                f = new File(dataDir + "unvaliddata/" + topic + service + ".uv");
+                if (f.exists()) {
                     try {
-                        dxr = dxreader.read(null, dxdecoder);
-                        dataFileWriter.append(dxr);
-                        dataFileWriter.flush();
-                        logger.debug("write 100 unvaild data to the file" + f.getName());
+                        dataFileWriter.appendTo(f);
                     } catch (IOException ex) {
-                        logger.info("write 100 unvaild data to the file" + f.getName() + " error");
                         logger.error(ex, ex);
-                        break;
                     }
                 } else {
-
                     try {
-                        dataFileWriter.flush();
-                        dataFileWriter.close();
+                        logger.info("create the file " + f.getName() + " for the topic " + topic + " and service " + service);
+                        dataFileWriter.create(docsschema, f);
                     } catch (IOException ex) {
                         logger.error(ex, ex);
                     }
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException ex) {
-                        logger.error(ex, ex);
-                    }
-                    count++;
                 }
-            }
-            String fb = System.currentTimeMillis() + "_" + f.getName();
-            if (f.exists()) {
-                f.renameTo(new File(dataDir + "unvalid/" + fb));
+
+                count = 0;
+                while (count < 100) {
+                    if (!sdQueue.isEmpty()) {
+                        byte[] sendData = pack(sdQueue);
+                        if (sendData == null) {
+                            continue;
+                        }
+                        count++;
+
+                        ByteArrayInputStream dxin = new ByteArrayInputStream(sendData);
+                        BinaryDecoder dxdecoder = DecoderFactory.get().binaryDecoder(dxin, null);
+                        GenericRecord dxr;
+                        try {
+                            dxr = dxreader.read(null, dxdecoder);
+                            dataFileWriter.append(dxr);
+                            dataFileWriter.flush();
+                            logger.info("write " + size + " unvalid data to the file" + f.getName());
+                        } catch (IOException ex) {
+                            logger.info("write " + size + " unvalid data to the file" + f.getName() + " error ");
+                            logger.error(ex, ex);
+                            break;
+                        }
+                    } else {
+                        try {
+                            dataFileWriter.flush();
+                        } catch (IOException ex) {
+                            logger.error(ex, ex);
+                        }
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException ex) {
+                            logger.error(ex, ex);
+                        }
+                        count++;
+                    }
+                }
+                try {
+                    dataFileWriter.flush();
+                    dataFileWriter.close();
+                } catch (IOException ex) {
+                    logger.error(ex, ex);
+                }
+                Date d = new Date();
+                String fb = format.format(d) + "_" + f.getName();
+                if (f.exists()) {
+                    f.renameTo(new File(dataDir + "unvaliddata/" + fb));
+                }
+            } else {
+                count2++;
+                if (count2 >= 100) {
+                    ConcurrentHashMap<Rule, ArrayBlockingQueue> unvalidDataStore = (ConcurrentHashMap<Rule, ArrayBlockingQueue>) RuntimeEnv.getParam(GlobalVariables.UNVALID_DATA_STORE);
+                    synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_UNVALIDDATA)) {
+                        unvalidDataStore.remove(rule);
+                    }
+                    break;
+                }
+                try {
+                    Thread.sleep(6000);
+                } catch (InterruptedException ex) {
+                    logger.error(ex, ex);
+                }
             }
         }
     }
 
+    /**
+     *
+     * package the data to a message
+     */
     byte[] pack(ArrayBlockingQueue abq) {
         Protocol protocoldocs = Protocol.parse(docsSchemaContent);
-        Schema docs = protocoldocs.getType("docs");
+        Schema docs = protocoldocs.getType(GlobalVariables.DOCS);
         GenericRecord docsRecord = new GenericData.Record(docs);
-        docsRecord.put("doc_schema_name", msgSchemaName);
-        GenericArray docSet = new GenericData.Array<GenericRecord>((size), docs.getField("doc_set").schema());
+        docsRecord.put(GlobalVariables.DOC_SCHEMA_NAME, msgSchemaName);
+        GenericArray docSet = new GenericData.Array<GenericRecord>((size), docs.getField(GlobalVariables.DOC_SET).schema());
         int count = 0;
         long stime = System.currentTimeMillis();
+        long etime = System.currentTimeMillis();
         while (count < size) {
             byte[] data = (byte[]) abq.poll();
             if (data != null) {
                 docSet.add(ByteBuffer.wrap(data));
                 count++;
             } else {
+                etime = System.currentTimeMillis();
+                if ((etime - stime) >= 2000) {
+                    break;
+                }
                 try {
-                    Thread.sleep(50);
+                    Thread.sleep(100);
                 } catch (InterruptedException ex) {
                     logger.error(ex, ex);
                 }
-            }
-            long etime = System.currentTimeMillis();
-            if ((etime - stime) >= 1000) {
-                break;
             }
         }
         if (count <= 0) {
             return null;
         }
-        docsRecord.put("sign", "evan");
-        docsRecord.put("doc_set", docSet);
-        logger.info(count);
+
+        logger.info("there are " + count + " unvalid data from the topic " + rule.getTopic() + " to the server " + rule.getServiceName());
+        docsRecord.put(GlobalVariables.SIGN, "evan");
+        docsRecord.put(GlobalVariables.DOC_SET, docSet);
         DatumWriter<GenericRecord> docsWriter = new GenericDatumWriter<GenericRecord>(docs);
         ByteArrayOutputStream docsbaos = new ByteArrayOutputStream();
         BinaryEncoder docsbe = new EncoderFactory().binaryEncoder(docsbaos, null);

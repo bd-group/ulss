@@ -118,9 +118,9 @@ class StoreStrandedDataThread implements Runnable {
                             dxr = dxreader.read(null, dxdecoder);
                             dataFileWriter.append(dxr);
                             dataFileWriter.flush();
-                            logger.info("write 1000 strandedDataThread data to the file" + f.getName());
+                            logger.info("write strandedDataThread data to the file" + f.getName());
                         } catch (IOException ex) {
-                            logger.info("write 1000 strandedDataThread data to the file" + f.getName() + " error ");
+                            logger.info("write strandedDataThread data to the file" + f.getName() + " error ");
                             logger.error(ex, ex);
                             break;
                         }
@@ -142,7 +142,7 @@ class StoreStrandedDataThread implements Runnable {
                     dataFileWriter.flush();
                     dataFileWriter.close();
                 } catch (Exception ex) {
-                    logger.error(ex,ex);
+                    logger.error(ex, ex);
                 }
                 Date d = new Date();
                 String fb = format.format(d) + "_" + f.getName();
@@ -179,15 +179,23 @@ class StoreStrandedDataThread implements Runnable {
         GenericArray docSet = new GenericData.Array<GenericRecord>((size), docs.getField(GlobalVariables.DOC_SET).schema());
         int count = 0;
         long stime = System.currentTimeMillis();
+        long etime = System.currentTimeMillis();
         while (count < size) {
             byte[] data = (byte[]) abq.poll();
             if (data != null) {
                 docSet.add(ByteBuffer.wrap(data));
                 count++;
-            }
-            long etime = System.currentTimeMillis();
-            if ((etime - stime) >= 10000) {
-                break;
+                stime = System.currentTimeMillis();
+            } else {
+                etime = System.currentTimeMillis();
+                if ((etime - stime) >= 2000) {
+                    break;
+                }
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ex) {
+                    logger.error(ex, ex);
+                }
             }
         }
         if (count <= 0) {

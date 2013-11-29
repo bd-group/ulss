@@ -587,7 +587,8 @@ public class SendToServiceThread implements Runnable {
             }
         }
         if (i >= 3) {
-            logger.info("send to the " + url + "failed or timeout");
+            logger.info("send to the " + url + " " + rule.getTopic() + " " + rule.getServiceName() + " failed or timeout");
+                    
             ArrayList<RNode> nodeurls = rule.getNodeUrls();
 
             if (rule.getNodeUrls().contains(node)) {
@@ -678,7 +679,7 @@ public class SendToServiceThread implements Runnable {
         }
 
         if (i >= 3) {
-            logger.info("send to the " + url + "failed or timeout");
+            logger.info("send to the " + url  + " " + rule.getTopic() + " " + rule.getServiceName() + " failed or timeout");
             changeFileTosend(flag);
         }
 
