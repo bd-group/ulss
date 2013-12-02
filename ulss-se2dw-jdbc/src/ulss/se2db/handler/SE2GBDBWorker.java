@@ -18,9 +18,13 @@ import com.taobao.metamorphosis.utils.ZkUtils;
 import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
@@ -78,7 +82,7 @@ public class SE2GBDBWorker extends SE2DBWorker {
             cc.setGroup(consumerGroupName);
             cc.setFetchTimeoutInMills(100000);
             cc.setMaxDelayFetchTimeInMills(500);
-            cc.setFetchRunnerCount(4);
+            cc.setFetchRunnerCount(10);
             cc.setCommitOffsetPeriodInMills(100);
             cc.setConsumerId(System.nanoTime() + "");
             final MessageConsumer consumer = sessionFactory.createConsumer(cc);
@@ -118,168 +122,221 @@ public class SE2GBDBWorker extends SE2DBWorker {
         int columnSize = tableColumnSet.size();
         GBLoadClient gbClient = null;
         int record2CommitNum = 0;
+        Map<String, GBSession> gbSessionSet = new HashMap<String, GBSession>();
+        ExecutorService threadPool = null;
+        
+        public GBMessageListener(){
+            threadPool = Executors.newFixedThreadPool(10);
+        }
+
+        class GBSession {
+
+            GBLoadClient gbClient = null;
+            Statement stmt = null;
+
+            public GBSession() {
+                gbClient = new GBLoadClient();
+                reset();
+            }
+
+            private void reset() {
+                try {
+                    gbClient.disconnect();
+                } catch (Exception ex) {
+                    logger.warn("error happened " + ex.getMessage(), ex);
+                }
+
+                try {
+                    String[] connStrItems = tableSe2DBRule.getConnStr().split(":");
+                    int rv = gbClient.connect(connStrItems[0], Integer.parseInt(connStrItems[1]), "", "");
+                    if (rv != 0) {
+                        gbClient.disconnect();
+                    }
+                } catch (Exception ex) {
+                    try {
+                        gbClient.disconnect();
+                    } catch (Exception ex1) {
+                    }
+                }
+            }
+
+            public Statement getStatment() {
+                if (stmt == null) {
+                    try {
+                        stmt = gbClient.startLoad("logdb", tableSe2DBRule.getTableName(), columnNameSet);
+                    } catch (Exception ex) {
+                        logger.warn("create stmt unsuccessfully for " + ex.getMessage(), ex);
+                        stmt = null;
+                    }
+                }
+                return stmt;
+            }
+
+            public void loadData(List<Row> rows) throws Exception {
+                if (stmt == null) {
+                    throw new Exception("statement is null for " + tableSe2DBRule.getTableName());
+                }
+
+                try {
+                    stmt.addRows(rows);
+                    long startTime = System.nanoTime();
+                    stmt.commit();
+                    long endTime = System.nanoTime();
+                    logger.info("write " + rows.size() + " records to table " + tableSe2DBRule.getTableName() + " successfully using " + (endTime - startTime) / (1024 * 1024) + " ms");
+                } catch (Exception ex) {
+                    logger.error("write " + rows.size() + " records to table " + tableSe2DBRule.getTableName() + " unsuccessfully ");
+                    try {
+                        stmt.rollback();
+                    } catch (Exception ex1) {
+                    }
+
+                    try {
+                        stmt.release();
+                    } catch (Exception ex1) {
+                    }
+                    stmt = null;
+                    throw ex;
+                }
+            }
+        }
 
         public GBMessageListener(List<String> pColumnNameSet) {
             columnNameSet = pColumnNameSet;
         }
 
-        private Statement getStatement() {
-            Statement stmt = null;
-            if (gbClient == null) {
+        private GBSession getGBSession() {
+            String key = Thread.currentThread().getId() + "";
+            GBSession gbSession = null;
+            synchronized (this) {
+                gbSession = gbSessionSet.get(key);
+            }
+
+            if (gbSession == null) {
+                gbSession = new GBSession();
                 synchronized (this) {
-                    if (gbClient == null) {
-                        try {
-                            String[] connStrItems = tableSe2DBRule.getConnStr().split(":");
-                            gbClient = new GBLoadClient();
-                            int tmprv = gbClient.connect(connStrItems[0], Integer.parseInt(connStrItems[1]), "", "");
-                            if (tmprv != 0) {
-                                gbClient.disconnect();
-                                gbClient = null;
-                            }
-                        } catch (Exception ex) {
-                            logger.error("connect to gbase unsuccessfully for " + ex.getMessage(), ex);
-                            gbClient = null;
-                        }
-                    }
+                    gbSessionSet.put(key, gbSession);
                 }
             }
 
-            if (gbClient != null) {
-                try {
-                    stmt = gbClient.startLoad("logdb", tableSe2DBRule.getTableName(), columnNameSet);
-                } catch (Exception ex) {
-                    synchronized (this) {
-                        try {
-                            gbClient.disconnect();
-                        } catch (Exception ex1) {
-                            logger.error(ex1.getMessage());
-                        }
-                        gbClient = null;
-                    }
-                    logger.error("create session to gdbase unsuccessfully for " + ex.getMessage(), ex);
-                }
-            }
-
-            return stmt;
+            return gbSession;
         }
 
         //fixme:add timeout
         public void recieveMessages(Message msg) {
-            logger.info(Thread.currentThread().getId() + " receives message " + msg.getData().length + " at " + System.nanoTime());
-
-            //decode docs
-            ByteArrayInputStream docsbis = new ByteArrayInputStream(msg.getData());//tuning
-            BinaryDecoder docsbd = new DecoderFactory().binaryDecoder(docsbis, null);
-            GenericArray docsset = null;
             try {
-                GenericRecord docsRecord = new GenericData.Record(RuntimeEnv.docsSchema);
-                RuntimeEnv.docsReader.read(docsRecord, docsbd);
-                docsset = (GenericData.Array<GenericRecord>) docsRecord.get("doc_set");
-                logger.info("docs size:" + docsset.size());
-                if (docsset.size() < 1) {
-                    logger.warn("doc set is empty");
+                logger.info(Thread.currentThread().getId() + " receives message " + msg.getData().length + " at " + System.nanoTime());
+
+                //decode docs
+                ByteArrayInputStream docsbis = new ByteArrayInputStream(msg.getData());//tuning
+                BinaryDecoder docsbd = new DecoderFactory().binaryDecoder(docsbis, null);
+                GenericArray docsset = null;
+                try {
+                    GenericRecord docsRecord = new GenericData.Record(RuntimeEnv.docsSchema);
+                    RuntimeEnv.docsReader.read(docsRecord, docsbd);
+                    docsset = (GenericData.Array<GenericRecord>) docsRecord.get("doc_set");
+                    logger.info("docs size:" + docsset.size());
+                    if (docsset.size() < 1) {
+                        logger.warn("doc set is empty");
+                        return;
+                    }
+                } catch (Exception ex) {
+                    logger.error("parse docs unsuccessfully for " + ex.getMessage(), ex);
+                    docsset = null;
                     return;
+                } finally {
+                    try {
+                        docsbis.close();
+                    } catch (Exception ex) {
+                    }
+                }
+
+                long startTime = -1;
+                long endTime = -1;
+                int validRecordNum = 0;
+
+                while (true) {
+                    //get gb session
+                    logger.info("getting gb session for " + tableSe2DBHandler.getTableName());
+                    GBSession gbSession = getGBSession();
+
+                    logger.info("getting statement for " + tableSe2DBHandler.getTableName());
+                    Statement stmt = gbSession.getStatment();
+                    while (true) {
+                        if (stmt == null) {
+                            gbSession.reset();
+                            stmt = gbSession.getStatment();
+                        } else {
+                            break;
+                        }
+                        try {
+                            logger.info("wait connection to " + tableSe2DBHandler.getTableName() + " available... ");
+                            Thread.sleep(200);
+                        } catch (Exception ex) {
+                        }
+                    }
+
+                    //build rows
+                    List<Row> rows = new ArrayList<Row>();
+                    Iterator<ByteBuffer> itor = docsset.iterator();
+                    startTime = System.nanoTime();
+                    while (itor.hasNext()) {
+                        //read doc
+                        ByteArrayInputStream docbis = new ByteArrayInputStream(((ByteBuffer) itor.next()).array());
+                        BinaryDecoder docbd = new DecoderFactory().binaryDecoder(docbis, null);
+                        GenericRecord docRecord = new GenericData.Record(docSchema);
+                        try {
+                            docReader.read(docRecord, docbd);
+                        } catch (Exception ex) {
+                            logger.warn("parse doc unsuccessfully for " + ex.getMessage() + " and skip it");
+                            continue;
+                        }
+
+                        //build row
+                        Row row = new Row(stmt);
+                        try {
+                            row.beginRow();
+                            for (int i = 0; i < columnSize; i++) {
+                                Object value = docRecord.get(tableColumnSet.get(i).getColumnName());
+                                if (value == null || value.toString().isEmpty()) {
+                                    row.appendNull();
+                                } else {
+                                    row.appendValue(value.toString());
+                                }
+                            }
+                            row.endRow();
+                            rows.add(row);
+                            validRecordNum++;
+                        } catch (Exception ex) {
+                            logger.warn("set record value unsuccessfully for " + ex.getMessage() + " and skip it", ex);
+                            continue;
+                        }
+                    }
+                    endTime = System.nanoTime();
+                    logger.info("build rows use " + (endTime - startTime) / (1024 * 1024) + "ms with " + validRecordNum + " valid records");
+
+                    //insert into dw
+                    if (validRecordNum > 0) {
+                        try {
+                            gbSession.loadData(rows);
+                            break;
+                        } catch (Exception ex) {
+                            logger.warn("write to " + tableSe2DBHandler.getTableName() + " unsuccessfully for " + ex.getMessage(), ex);
+                            gbSession.reset();
+                            continue;
+                        }
+                    } else {
+                        logger.warn("no records to commit");
+                        break;
+                    }
                 }
             } catch (Exception ex) {
-                logger.error("parse docs unsuccessfully for " + ex.getMessage(), ex);
-                docsset = null;
-                return;
-            } finally {
-                try {
-                    docsbis.close();
-                } catch (Exception ex) {
-                }
-            }
-
-            long startTime = -1;
-            long endTime = -1;
-            int validRecordNum = 0;
-
-            while (true) {
-                //get stmt
-                Statement stmt = getStatement();
-                while (true) {
-                    if (stmt == null) {
-                        logger.warn("stmt is null and try to constrauct it");
-                        stmt = getStatement();
-                    } else {
-                        logger.warn("construct handler successfully");
-                        break;
-                    }
-                }
-
-                //build rows
-                List<Row> rows = new ArrayList<Row>();
-                Iterator<ByteBuffer> itor = docsset.iterator();
-                startTime = System.nanoTime();
-                while (itor.hasNext()) {
-                    //read doc
-                    ByteArrayInputStream docbis = new ByteArrayInputStream(((ByteBuffer) itor.next()).array());
-                    BinaryDecoder docbd = new DecoderFactory().binaryDecoder(docbis, null);
-                    GenericRecord docRecord = new GenericData.Record(docSchema);
-                    try {
-                        docReader.read(docRecord, docbd);
-                    } catch (Exception ex) {
-                        logger.warn("parse doc unsuccessfully for " + ex.getMessage() + " and skip it");
-                        continue;
-                    }
-
-                    //build row
-                    Row row = new Row(stmt);
-                    try {
-                        row.beginRow();
-                        for (int i = 0; i < columnSize; i++) {
-                            Object value = docRecord.get(tableColumnSet.get(i).getColumnName());
-                            if (value == null || value.toString().isEmpty()) {
-                                row.appendNull();
-                            } else {
-                                row.appendValue(value.toString());
-                            }
-                        }
-                        row.endRow();
-                        rows.add(row);
-                        validRecordNum++;
-                    } catch (Exception ex) {
-                        logger.warn("set record value unsuccessfully for " + ex.getMessage() + " and skip it", ex);
-                        continue;
-                    }
-                }
-                endTime = System.nanoTime();
-                logger.info("build rows use " + (endTime - startTime) / (1024 * 1024) + "us with " + validRecordNum + " valid records");
-
-                //insert into dw
-                if (validRecordNum > 0) {
-                    try {
-                        stmt.addRows(rows);
-                        startTime = System.nanoTime();
-                        stmt.commit();
-                        endTime = System.nanoTime();
-                        logger.info("write " + validRecordNum + " records to table " + tableSe2DBRule.getTableName() + " successfully using " + (endTime - startTime) / (1024 * 1024) + " us");
-                        break;
-                    } catch (Exception ex) {
-                        logger.error("write " + validRecordNum + " records to table " + tableSe2DBRule.getTableName() + " unsuccessfully ");
-                        try {
-                            stmt.rollback();
-                        } catch (Exception ex1) {
-                        }
-                    } finally {
-                        try {
-                            stmt.release();
-                        } catch (Exception ex1) {
-                        }
-                        stmt = null;
-                    }
-                } else {
-                    logger.warn("no records to commit");
-                    break;
-                }
+                logger.fatal("unknown exception " + ex.getMessage(), ex);
             }
         }
 
         public Executor getExecutor() {
-            // Thread pool to process messages,maybe null.
-//            ExecutorService threadPool = Executors.newFixedThreadPool(100);
-            return null;
+            // Thread pool to process messages,maybe null.            
+            return threadPool;
         }
     }
 }

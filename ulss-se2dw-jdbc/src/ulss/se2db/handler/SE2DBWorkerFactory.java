@@ -8,7 +8,7 @@ package ulss.se2db.handler;
  *
  * @author alexmu
  */
-public class SE2DBWorkerFactory {
+public class SE2DBWorkerFactory { 
 
     public static SE2DBWorker getSE2DBWroker(String pDBType, TableSe2DBHandler pTableSe2DBHandler) throws Exception {
         SE2DBWorker se2DBWorker = null;

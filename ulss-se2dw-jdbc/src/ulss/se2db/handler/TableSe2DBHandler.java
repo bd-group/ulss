@@ -142,6 +142,10 @@ public class TableSe2DBHandler {
     public Schema getDocSchema() {
         return docSchema;
     }
+    
+    public int getBatchSize(){
+        return tableSe2DBRule.getBatchSize();
+    }
 
     public DatumReader<GenericRecord> getDocReader() {
         return docReader;
@@ -150,4 +154,6 @@ public class TableSe2DBHandler {
     public String getRuleName() {
         return tableSe2DBRule.getRuleName();
     }
+    
+    
 }

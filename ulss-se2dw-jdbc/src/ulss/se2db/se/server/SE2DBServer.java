@@ -51,7 +51,7 @@ public class SE2DBServer {
     private static void startup() throws Exception {
         Map<String, TableSe2DBHandler> tableHandlerSet = new HashMap<String, TableSe2DBHandler>();
 
-        while (true) {
+        while (true) { 
 
             logger.info("checking se2db rule in metastore....");
             Map<String, List> tableSe2DBRuleOPSet = RuntimeEnv.metaStoreManger.getTableSe2DBRuleSet();

@@ -112,8 +112,9 @@ public class MetaStoreManager {
                     String userName = ruleContentItems[3];
                     String passwd = ruleContentItems[4];
                     String tableName = ruleContentItems[5];
-                    String columnSetStr = ruleContentItems[6].toLowerCase();
-                    TableSe2DBRule tableSe2DBRule = new TableSe2DBRule(ruleName, mqName, dbType, connStr, userName, passwd, tableName);
+                    int batchSize = Integer.parseInt(ruleContentItems[6]);
+                    String columnSetStr = ruleContentItems[7].toLowerCase();
+                    TableSe2DBRule tableSe2DBRule = new TableSe2DBRule(ruleName, mqName, dbType, connStr, userName, passwd, tableName, batchSize);
                     tableSe2DBRule.parseColumSet(columnSetStr);
                     newestTableSe2DBRuleSet.put(ruleName, tableSe2DBRule);
                 }

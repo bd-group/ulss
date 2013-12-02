@@ -16,3 +16,9 @@
 !/ulss-se2dw-async/lib
 !/ulss-se2dw-async/ulss-se2db.properties
 !/ulss-se2dw-async/log4j.properties
+#ulss-se2dw-jdbc
+/ulss-se2dw-jdbc/*
+!/ulss-se2dw-jdbc/src
+!/ulss-se2dw-jdbc/lib
+!/ulss-se2dw-jdbc/ulss-se2dw-jdbc.properties
+!/ulss-se2dw-jdbc/log4j.properties

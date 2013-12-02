@@ -20,9 +20,10 @@ public class TableSe2DBRule {
     String userName;
     String password;
     String tableName;
+    int batchSize;
     List<Column> columnSet = new ArrayList<Column>();
 
-    public TableSe2DBRule(String pRuleName, String pMQName, String pDBType, String pJDBCURL, String pUserName, String pPassword, String pTableName) {
+    public TableSe2DBRule(String pRuleName, String pMQName, String pDBType, String pJDBCURL, String pUserName, String pPassword, String pTableName, int pBacthSize) {
         ruleName = pRuleName;
         mqName = pMQName;
         dbType = pDBType;
@@ -30,6 +31,7 @@ public class TableSe2DBRule {
         userName = pUserName;
         password = pPassword;
         tableName = pTableName;
+        batchSize = pBacthSize;
     }
 
     public void parseColumSet(String pColumnSetStr) {
@@ -72,6 +74,10 @@ public class TableSe2DBRule {
         return ruleName;
     }
 
+    public int getBatchSize() {
+        return batchSize;
+    }
+
     public class Column {
 
         String columnName;
@@ -81,7 +87,6 @@ public class TableSe2DBRule {
             columnName = pColumnName;
             columnIdx = pColumnIdx;
         }
-        
 
         public String getColumnName() {
             return columnName;
