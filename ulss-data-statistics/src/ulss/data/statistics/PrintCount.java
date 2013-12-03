@@ -73,42 +73,45 @@ public class PrintCount implements Runnable {
                 bos.write("------------".getBytes());
                 bos.write(("this is counted in the " + dtime).getBytes());
                 bos.write("------------".getBytes());
-                for (String mq : mqToTime.keySet()) {
-                    HashMap<String, AtomicLong[]> timeToCount = MQToCount.get(mq);
-                    bos.write('\n');
-                    d.setMinutes(0);
-                    d.setSeconds(0);
-                    for (int i = 0; i < statisticstime; i++) {
-                        String tmptime = dateFormat.format(d);
-                        AtomicLong[] al = timeToCount.get(tmptime);
-                        if (al != null) {
-                            bos.write((dtime + " " + mq + " " + tmptime + " count : " + al[0]).getBytes());
-                        } else {
-                            bos.write((dtime + " " + mq + " " + tmptime + " count : 0").getBytes());
-                        }
-                        d.setHours(d.getHours() - 1);
+                synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_COUNT)) {
+                    for (String mq : mqToTime.keySet()) {
+                        HashMap<String, AtomicLong[]> timeToCount = MQToCount.get(mq);
                         bos.write('\n');
-                    }
-
-                    Date dh = new Date();
-                    dh.setMinutes(0);
-                    dh.setSeconds(0);
-                    int day = statisticstime / 24;
-                    for (int i = 0; i <= day; i++) {
-                        long dcount = 0L;
-                        for (int j = 0; j < 24; j++) {
-                            dh.setHours(j);
-                            String tmpd = dateFormat.format(dh);
-                            AtomicLong[] al = timeToCount.get(tmpd);
+                        d = new Date();
+                        d.setMinutes(0);
+                        d.setSeconds(0);
+                        for (int i = 0; i < statisticstime; i++) {
+                            String tmptime = dateFormat.format(d);
+                            AtomicLong[] al = timeToCount.get(tmptime);
                             if (al != null) {
-                                dcount += al[0].longValue();
+                                bos.write((dtime + " " + mq + " " + tmptime + " count : " + al[0]).getBytes());
+                            } else {
+                                bos.write((dtime + " " + mq + " " + tmptime + " count : 0").getBytes());
                             }
+                            d.setHours(d.getHours() - 1);
+                            bos.write('\n');
                         }
-                        dh.setHours(0);
-                        String tmpd = dateFormat.format(dh);
-                        bos.write((dtime + " " + mq + " " + tmpd + " count : " + dcount).getBytes());
-                        bos.write('\n');
-                        dh.setDate(dh.getDate() - 1);
+
+                        Date dh = new Date();
+                        dh.setMinutes(0);
+                        dh.setSeconds(0);
+                        int day = statisticstime / 24;
+                        for (int i = 0; i <= day; i++) {
+                            long dcount = 0L;
+                            for (int j = 0; j < 24; j++) {
+                                dh.setHours(j);
+                                String tmpd = dateFormat.format(dh);
+                                AtomicLong[] al = timeToCount.get(tmpd);
+                                if (al != null) {
+                                    dcount += al[0].longValue();
+                                }
+                            }
+                            dh.setHours(0);
+                            String tmpd = dateFormat.format(dh);
+                            bos.write((dtime + " " + mq + " " + tmpd + " sum count : " + dcount).getBytes());
+                            bos.write('\n');
+                            dh.setDate(dh.getDate() - 1);
+                        }
                     }
                 }
                 bos.write("------------------------------------------------------------------".getBytes());

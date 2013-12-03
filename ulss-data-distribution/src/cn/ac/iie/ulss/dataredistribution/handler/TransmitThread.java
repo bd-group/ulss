@@ -13,6 +13,7 @@ import java.nio.ByteBuffer;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Map;
@@ -279,25 +280,26 @@ public class TransmitThread implements Runnable {
                                             logger.error(ex, ex);
                                         }
 
-                                        if (vb) {
-                                            synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
-                                                if (!chm.containsKey(keyinterval)) {
-                                                    ArrayBlockingQueue abq = new ArrayBlockingQueue(2 * sendPoolSize);
-                                                    chm.put(keyinterval, abq);
-                                                    logger.debug("the ConcurrentHashMap for " + node.getName() + " for the keyinterval " + keyinterval + " is created");
-                                                    abq.put(onedata);
-                                                    ThreadGroup sendThreadPool = ((Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL)).get(topic);
-                                                    DataSenderThread dst = new DataSenderThread(abq, sendPoolSize, node, rule.getTopic(), rule.getServiceName(), sendThreadPool, rule, keyinterval,rule.getPartType() , rule.getKeywords());
-                                                    Thread tdst = new Thread(dst);
-                                                    tdst.start();
-                                                } else {
-                                                    ArrayBlockingQueue abq = (ArrayBlockingQueue) chm.get(keyinterval);
-                                                    abq.put(onedata);
-                                                }
-                                            }
-                                        } else {
-                                            storeUnvalidData(rule, onedata);
+                                        if (!vb) {
+                                            logger.info("the time in the topic " + topic + " is out-of-date!");
                                         }
+
+                                        synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
+                                            if (!chm.containsKey(keyinterval)) {
+                                                ArrayBlockingQueue abq = new ArrayBlockingQueue(2 * sendPoolSize);
+                                                chm.put(keyinterval, abq);
+                                                logger.debug("the ConcurrentHashMap for " + node.getName() + " for the keyinterval " + keyinterval + " is created");
+                                                abq.put(onedata);
+                                                ThreadGroup sendThreadPool = ((Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL)).get(topic);
+                                                DataSenderThread dst = new DataSenderThread(abq, sendPoolSize, node, rule.getTopic(), rule.getServiceName(), sendThreadPool, rule, keyinterval, rule.getPartType(), rule.getKeywords());
+                                                Thread tdst = new Thread(dst);
+                                                tdst.start();
+                                            } else {
+                                                ArrayBlockingQueue abq = (ArrayBlockingQueue) chm.get(keyinterval);
+                                                abq.put(onedata);
+                                            }
+                                        }
+
                                         break;
                                     } else {
                                         throw new Exception("there is no this node in " + topic + " " + rule.getServiceName());
@@ -474,18 +476,19 @@ public class TransmitThread implements Runnable {
         String et = keyinterval.split("\\|")[1];
         Date stime = dateFormat.parse(st);
         Date etime = dateFormat.parse(et);
-        Date nowtime = new Date();
 
-        nowtime.setMonth(stime.getMonth() - 1);
+        Calendar ca = Calendar.getInstance();
+        ca.set(5, ca.get(5) - 30);
+        Date nowtime = ca.getTime();
         if (nowtime.after(stime)) {
             return false;
         }
-        nowtime = new Date();
-        nowtime.setDate(etime.getDate() + 7);
+
+        ca.set(5, ca.get(5) + 37);
+        nowtime = ca.getTime();
         if (nowtime.before(etime)) {
             return false;
         }
-
         return true;
     }
 
