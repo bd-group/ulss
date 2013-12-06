@@ -4,8 +4,6 @@ package cn.ac.iie.ulss.dataredistribution.commons;
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-
-
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
 import cn.ac.iie.ulss.dataredistribution.handler.HandlerDetectNodeThread;
 import cn.ac.iie.ulss.dataredistribution.handler.SendStrandedDataThread;
@@ -28,7 +26,6 @@ import org.apache.log4j.PropertyConfigurator;
  */
 public class GlobalVariables {
 
-    public static final String SYN_COUNT = "synCount";
     public static final String SYN_VALUE_TO_FILE = "synValueToFile";
     public static final String SYN_MESSAGETRANSFERSTATION = "synMessageTransferStation";
     public static final String SYN_STORE_STRANDEDDATA = "synStoreStrandedData";
@@ -63,6 +60,7 @@ public class GlobalVariables {
     public static final String DOC_SCHEMA_NAME = "doc_schema_name";
     public static final String SIGN = "sign";
     public static final String TRANSMITRULE = "transmitrule";
+    public static final String TOPIC_TO_SYN_COUNT = "TopicToSynCount";
     static Logger logger = null;
 
     static {
@@ -75,9 +73,6 @@ public class GlobalVariables {
      * init the Global Variables
      */
     public static void initialize() {
-
-        byte[] synCount = new byte[0];
-        RuntimeEnv.addParam(SYN_COUNT, synCount);
 
         byte[] synValueToFile = new byte[0];
         RuntimeEnv.addParam(SYN_VALUE_TO_FILE, synValueToFile);
@@ -189,7 +184,7 @@ public class GlobalVariables {
         logger.info("setting the metaToTopic to the Global Variables");
         Map<String, String> metaToTopic = new HashMap<String, String>();
         RuntimeEnv.addParam(META_TO_TOPIC, metaToTopic);
-        
+
         logger.info("setting the nodeToRule to the Global Variables");
         Map<RNode, Rule> nodeToRule = new HashMap<RNode, Rule>();
         RuntimeEnv.addParam(NODE_TO_RULE, nodeToRule);
@@ -197,5 +192,9 @@ public class GlobalVariables {
         logger.info("setting the transmitrule to the Global Variables");
         ArrayList<String> transmitrule = new ArrayList<String>();
         RuntimeEnv.addParam(TRANSMITRULE, transmitrule);
+
+        logger.info("setting the TopicToSynCount to the Global Variables");
+        Map<String, byte[]> TopicToSynCount = new HashMap<String, byte[]>();
+        RuntimeEnv.addParam(TOPIC_TO_SYN_COUNT, TopicToSynCount);
     }
 }

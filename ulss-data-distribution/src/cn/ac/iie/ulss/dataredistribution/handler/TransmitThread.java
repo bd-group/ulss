@@ -60,9 +60,9 @@ public class TransmitThread implements Runnable {
     String msgSchemaContent = null;
     String msgSchemaName = null;
     Map<RNode, Object> sendRows = null;
+    Map<String, byte[]> TopicToSynCount = (Map<String, byte[]>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SYN_COUNT);
     static Integer sendPoolSize = 1000;
     static long limit = 5000;
-    static final byte[] li = new byte[0];
 
     static {
         PropertyConfigurator.configure("log4j.properties");
@@ -497,6 +497,7 @@ public class TransmitThread implements Runnable {
      * Split and send the message to the transfer station
      */
     private void addCount() {
+        byte[] li = TopicToSynCount.get(topic);
         synchronized (li) {
             Date dm = new Date();
             ConcurrentHashMap<String, AtomicLong[]> topicToAcceptCount = (ConcurrentHashMap<String, AtomicLong[]>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_ACCEPTCOUNT);
