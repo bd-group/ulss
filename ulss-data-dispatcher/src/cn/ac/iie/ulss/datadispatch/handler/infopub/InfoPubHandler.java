@@ -7,6 +7,11 @@ package cn.ac.iie.ulss.datadispatch.handler.infopub;
 import cn.ac.iie.ulss.datadispatch.commons.RuntimeEnv;
 import cn.ac.iie.ulss.datadispatch.handler.datadispatch.DataDispatchHandler;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -71,6 +76,18 @@ public class InfoPubHandler extends AbstractHandler {
                 }
             }
             responseContent = "0\n" + responseContent;
+        } else if (opType.equals("getDataLoadVolumeStat")) {
+            Map<String, Long> dataVolumeStatisticSet = null;
+            try {
+                dataVolumeStatisticSet = DataDispatchHandler.getDataVolumeStatics();
+                Set<Entry<String, Long>> entrySet = dataVolumeStatisticSet.entrySet();
+                for (Entry entry : entrySet) {
+                    responseContent += entry.getKey() + "-->" + entry.getValue() + "\n";
+                }
+                responseContent = new SimpleDateFormat("yyyyMMdd HH:mm:ss").format(new Date()) + "\n" + responseContent;
+            } catch (Exception ex) {
+                responseContent = "get data volume statistics unsuccessfully for " + ex.getMessage();
+            }
         } else {
             responseContent = "-1\nunknown op";
         }

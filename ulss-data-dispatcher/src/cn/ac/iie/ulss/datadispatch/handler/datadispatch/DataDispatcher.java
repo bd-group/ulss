@@ -4,6 +4,7 @@
  */
 package cn.ac.iie.ulss.datadispatch.handler.datadispatch;
 
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -24,6 +25,7 @@ public class DataDispatcher {
     //mq
     String docStoreMQName = null;
     MQProducerPool mqProducerPool = null;
+    AtomicLong dataVolume = new AtomicLong();
 
     private DataDispatcher(String pDocSchemaName, String pDocSchemaContent, String pDocStoreMQName, MQProducerPool pMQProducerPool) {
         docSchemaName = pDocSchemaName;
@@ -33,7 +35,6 @@ public class DataDispatcher {
 //        docReader = new GenericDatumReader<>(docSchema);
         docStoreMQName = pDocStoreMQName;
         mqProducerPool = pMQProducerPool;
-
     }
 
     public static DataDispatcher getDataDispatcher(String pDocSchemaName, String pDocSchemaContent, String pDocStoreMQName) {
@@ -51,6 +52,14 @@ public class DataDispatcher {
 
     public String getDocSchemaContent() {
         return docSchemaContent;
+    }
+
+    public void incDataVolumeStatistics(long pDelta) {
+        dataVolume.addAndGet(pDelta);
+    }
+
+    public long getDataVolumeStatistics() {
+        return dataVolume.longValue();
     }
 }
 //        GenericArray docsSet = (GenericData.Array<GenericRecord>) docsRecord.get("doc_set");

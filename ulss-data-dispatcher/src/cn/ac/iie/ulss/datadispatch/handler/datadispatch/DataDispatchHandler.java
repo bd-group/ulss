@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import javax.servlet.ServletException;
 import javax.servlet.ServletInputStream;
@@ -42,7 +43,7 @@ public class DataDispatchHandler extends AbstractHandler {
     private static Schema docsSchema = null;
     private static DatumReader<GenericRecord> docsReader = null;
     private static DataDispatchHandler dataDispatchHandler = null;
-    private Map<String, DataDispatcher> docSchema2Dispatcher = new HashMap<String, DataDispatcher>();
+    private Map<String, DataDispatcher> docSchema2DispatcherSet = new HashMap<String, DataDispatcher>();
     static Logger logger = null;
 
     static {
@@ -96,7 +97,7 @@ public class DataDispatchHandler extends AbstractHandler {
 
                     DataDispatcher dataDispatcher = DataDispatcher.getDataDispatcher(schemaName, schemaContent, mq);
                     if (dataDispatcher != null) {
-                        dataDispatchHandler.docSchema2Dispatcher.put(schemaFullName, dataDispatcher);
+                        dataDispatchHandler.docSchema2DispatcherSet.put(schemaFullName, dataDispatcher);
                         logger.info("construct data dispatcher for schema " + schemaFullName + " successfully");
                     } else {
                         dataDispatchHandler = null;
@@ -113,7 +114,7 @@ public class DataDispatchHandler extends AbstractHandler {
                 dataDispatchHandler = null;
             }
 
-            if (dataDispatchHandler.docSchema2Dispatcher.size() < 1) {
+            if (dataDispatchHandler.docSchema2DispatcherSet.size() < 1) {
                 logger.warn("no bussiness data schema is found in metadb,please check metadb to ensure that this condition is reasonable");
             }
 
@@ -139,7 +140,7 @@ public class DataDispatchHandler extends AbstractHandler {
     }
 
     public static String getDocSchemaContent(String pSchemaName) {
-        DataDispatcher dataDispatcher = dataDispatchHandler.docSchema2Dispatcher.get(pSchemaName);
+        DataDispatcher dataDispatcher = dataDispatchHandler.docSchema2DispatcherSet.get(pSchemaName);
 
         if (dataDispatcher == null) {
             return null;
@@ -148,12 +149,28 @@ public class DataDispatchHandler extends AbstractHandler {
         }
     }
 
+    public static Map<String, Long> getDataVolumeStatics() throws Exception {
+        Map<String, Long> dataVolumeStatisticSet = new HashMap<String, Long>();
+        try {
+            Iterator itor = dataDispatchHandler.docSchema2DispatcherSet.keySet().iterator();
+            while(itor.hasNext()){
+                String docSchemaName = (String)itor.next();
+                Long dataVolumeStatistc = dataDispatchHandler.docSchema2DispatcherSet.get(docSchemaName).getDataVolumeStatistics();
+                dataVolumeStatisticSet.put(docSchemaName, dataVolumeStatistc);
+            }
+            return dataVolumeStatisticSet;
+        } catch (Exception ex) {
+            throw ex;
+        }
+    }
+
     @Override
     public void handle(String string, Request baseRequest, HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws IOException, ServletException {
         String remoteHost = baseRequest.getRemoteAddr();
         int remotePort = baseRequest.getRemotePort();
         String reqID = String.valueOf(System.nanoTime());
-        logger.info("receive request from " + remoteHost + ":" + remotePort + " and assigned id " + reqID);
+        String region = getRegion(baseRequest);
+        logger.info("receive request from " + remoteHost + ":" + remotePort + "@" + region + " and assigned id " + reqID);
 
         //retrive data
         ServletInputStream servletInputStream = null;
@@ -181,6 +198,14 @@ public class DataDispatchHandler extends AbstractHandler {
                 servletInputStream.close();
             } catch (Exception ex) {
             }
+        }
+
+        if (req == null || req.length == 0) {
+            String warnInfo = "req " + reqID + ":retrive bussiness data unsuccessfully for content is empty";
+            logger.error(warnInfo);
+            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+            httpServletResponse.getWriter().println("-1\n" + warnInfo);
+            return;
         }
 
         //decode data
@@ -225,14 +250,14 @@ public class DataDispatchHandler extends AbstractHandler {
             httpServletResponse.getWriter().println("-1\n" + errInfo);
             return;
         }
-        String region = getRegion(baseRequest);
+
         String docSchemaFullName = docSchemaName + (region.isEmpty() ? "" : "@" + region);
         logger.debug("req " + reqID + ":doc shcema full name is " + docSchemaFullName);
 
-        DataDispatcher dataDispatcher = docSchema2Dispatcher.get(docSchemaFullName);
+        DataDispatcher dataDispatcher = docSchema2DispatcherSet.get(docSchemaFullName);
         if (dataDispatcher == null) {
-            synchronized (docSchema2Dispatcher) {
-                dataDispatcher = docSchema2Dispatcher.get(docSchemaFullName);
+            synchronized (docSchema2DispatcherSet) {
+                dataDispatcher = docSchema2DispatcherSet.get(docSchemaFullName);
                 if (dataDispatcher == null) {
                     ResultSet rs = null;
                     try {
@@ -266,7 +291,7 @@ public class DataDispatchHandler extends AbstractHandler {
                             String mq = rs.getString("mq");
                             dataDispatcher = DataDispatcher.getDataDispatcher(schemaName, schemaContent, mq);
                             if (dataDispatcher != null) {
-                                dataDispatchHandler.docSchema2Dispatcher.put(docSchemaFullName, dataDispatcher);
+                                dataDispatchHandler.docSchema2DispatcherSet.put(docSchemaFullName, dataDispatcher);
                                 logger.info("req " + reqID + ":constructing data dispatcher for schema " + docSchemaFullName + " is finished successfully");
                             } else {
                                 String warningInfo = "req " + reqID + ":internal error for constructing data dispatcher for schema " + docSchemaFullName + " is failed";
@@ -322,6 +347,7 @@ public class DataDispatchHandler extends AbstractHandler {
                     httpServletResponse.getWriter().println("-1\n" + errInfo);
                 } else {
                     dataDispatcher.dispatch(req);
+                    dataDispatcher.incDataVolumeStatistics(docsSet.size());
                     logger.info("req " + reqID + ":sending " + docsSet.size() + " records of " + docSchemaName + " to metaq successfully");
                     httpServletResponse.setStatus(HttpServletResponse.SC_OK);
                     httpServletResponse.getWriter().println("0\n" + bzSysSign + "\n" + reqID);
