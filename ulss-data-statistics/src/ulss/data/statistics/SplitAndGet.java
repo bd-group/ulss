@@ -8,7 +8,6 @@ import cn.ac.iie.ulss.statistics.commons.GlobalVariables;
 import cn.ac.iie.ulss.statistics.commons.RuntimeEnv;
 import com.taobao.metamorphosis.Message;
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -71,7 +70,7 @@ public class SplitAndGet {
     }
 
     public void count(Message message) {
-        logger.info("check one message");
+        logger.info("check one message for " + MQ);
         byte[] msg = message.getData();
 
         protocoldocs = Protocol.parse(docsSchemaContent);
@@ -88,6 +87,11 @@ public class SplitAndGet {
             docsGr = docsreader.read(null, docsdecoder);
         } catch (Exception ex) {
             logger.info((new Date()) + " split the data package from the topic " + MQ + " " + ex, ex);
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ex1) {
+                logger.error(ex, ex);
+            }
             return;
         }
         msgSet = (GenericData.Array<GenericRecord>) docsGr.get(GlobalVariables.DOC_SET);
@@ -101,8 +105,12 @@ public class SplitAndGet {
             try {
                 dxxRecord = msgreader.read(null, msgbd);
             } catch (Exception ex) {
-
                 logger.info((new Date()) + " split the one data from the topic " + MQ + " in the dataPool wrong " + ex, ex);
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException ex1) {
+                    logger.error(ex, ex);
+                }
                 continue;
             }
 
