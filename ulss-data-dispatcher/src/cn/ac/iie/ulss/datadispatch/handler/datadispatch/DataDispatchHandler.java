@@ -261,7 +261,7 @@ public class DataDispatchHandler extends AbstractHandler {
                 if (dataDispatcher == null) {
                     ResultSet rs = null;
                     try {
-                        String sql = "select dataschema.schema_name,dataschema.schema_content,dataschema_mq.mq,,dataschema_mq.region from dataschema inner join dataschema_mq on dataschema.schema_name=dataschema_mq.schema_name and dataschema.schema_name='" + docSchemaName + (region.isEmpty() ? "" : "' and dataschema_mq.region='" + region + "'");
+                        String sql = "select dataschema.schema_name,dataschema.schema_content,dataschema_mq.mq,dataschema_mq.region from dataschema inner join dataschema_mq on dataschema.schema_name=dataschema_mq.schema_name and dataschema.schema_name='" + docSchemaName + (region.isEmpty() ? "' and dataschema_mq.region is null" : "' and dataschema_mq.region='" + region + "'");
                         logger.debug("req " + reqID + ":" + sql);
                         for (int tryTimes = 0; tryTimes < 10; tryTimes++) {
                             try {
@@ -301,7 +301,7 @@ public class DataDispatchHandler extends AbstractHandler {
                                 return;
                             }
                         } else {
-                            String warningInfo = "req " + reqID + ":unkonow schema " + docsRecord.get("doc_schema_name").toString();
+                            String warningInfo = "req " + reqID + ":unkonow schema " + docSchemaFullName;
                             logger.warn(warningInfo);
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
                             httpServletResponse.getWriter().println("-1\n" + warningInfo);
