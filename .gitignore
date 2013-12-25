@@ -22,3 +22,12 @@
 !/ulss-se2dw-jdbc/lib
 !/ulss-se2dw-jdbc/ulss-se2dw-jdbc.properties
 !/ulss-se2dw-jdbc/log4j.properties
+/ulss-data-se2dw-c3p0/nbproject/private/
+#ulss-se2dw-c3p0
+/ulss-data-se2dw-c3p0
+#/ulss-se2dw-c3p0/*
+#!/ulss-se2dw-c3p0/src
+#!/ulss-se2dw-c3p0/lib
+#!/ulss-se2dw-c3p0/ulss-se2dw.properties
+#!/ulss-se2dw-c3p0/log4j.properties
+#/ulss-data-se2dw-c3p0/nbproject/private/

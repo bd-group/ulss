@@ -5,6 +5,7 @@
 package ulss.se2db.metastore;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -40,6 +41,7 @@ public class TableSe2DBRule {
             String[] columnItems = column.split(",");
             columnSet.add(new Column(columnItems[0], Integer.parseInt(columnItems[1])));
         }
+        Collections.sort(columnSet);
     }
 
     public String getMqName() {
@@ -78,7 +80,7 @@ public class TableSe2DBRule {
         return batchSize;
     }
 
-    public class Column {
+    public class Column implements Comparable {
 
         String columnName;
         int columnIdx;
@@ -94,6 +96,12 @@ public class TableSe2DBRule {
 
         public int getColumnIdx() {
             return columnIdx;
+        }
+
+        @Override
+        public int compareTo(Object o) {
+            Column otherColumn = (Column) o;
+            return columnIdx - otherColumn.columnIdx;
         }
     }
 }
