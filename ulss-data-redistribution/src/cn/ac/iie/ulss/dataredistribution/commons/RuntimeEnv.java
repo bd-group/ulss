@@ -21,6 +21,7 @@ public class RuntimeEnv {
     public static final String WRITE_TO_FILE_THREAD = "writeToFileThread";
     public static final String TRANSMIT_THREAD = "transmitThread";
     public static final String DATASENDER_THREAD = "datasenderThread";
+    public static final String DATASENDER_LIMITTIME = "datasenderLimitTime";
     public static final String SEND_THREAD_POOL_SIZE = "sendThreadPoolSize";
     public static final String ACTIVE_THREAD_COUNT = "activeThreadCount";
     public static final String METASTORE_CLIENT = "metaStoreClient";
@@ -114,7 +115,14 @@ public class RuntimeEnv {
         logger.info("get datasenderThread " + datasenderThread);
         dynamicParams.put(DATASENDER_THREAD, datasenderThread);
 
-        
+        int datasenderLimitTime = conf.getInt(DATASENDER_LIMITTIME, 1000);
+        if (datasenderLimitTime <= 0) {
+            logger.error("parameter datasenderLimitTime is a wrong number");
+            return false;
+        }
+        logger.info("get datasenderLimitTime " + datasenderLimitTime);
+        dynamicParams.put(DATASENDER_LIMITTIME, datasenderLimitTime);
+
         int sendThreadPoolSize = conf.getInt(SEND_THREAD_POOL_SIZE, 20);
         if (sendThreadPoolSize <= 0) {
             logger.error("parameter sendThreadPoolSize is a wrong number");
@@ -156,7 +164,7 @@ public class RuntimeEnv {
         dynamicParams.put(METASTORE_CLIENT_POOL_SIZE, metaStoreClientPoolSize);
 
         String metaStoreZkCluster = conf.getString(METASTORE_ZK_CLUSTER, "");
-        if (metaStoreZkCluster.isEmpty() ) {
+        if (metaStoreZkCluster.isEmpty()) {
             logger.error("parameter metaStoreZkCluster does not exist or is not defined");
             return false;
         }
@@ -170,7 +178,7 @@ public class RuntimeEnv {
         }
         logger.info("get region " + region);
         dynamicParams.put(REGION, region);
-        
+
         String group = conf.getString(GROUP, "");
         if (group.isEmpty()) {
             logger.error("parameter group does not exist or is not defined");

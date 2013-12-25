@@ -44,6 +44,7 @@ public class DataSenderThread implements Runnable {
     Map<String, ThreadGroup> topicToSendThreadPool = null;
     ThreadGroup sendThreadPool = null;
     ConcurrentHashMap<String, Object[]> valueToFile = null;
+    int datasenderLimitTime = 0;
     int sendThreadPoolSize = 0;
     Rule rule = null;
     int count = 0;
@@ -54,7 +55,7 @@ public class DataSenderThread implements Runnable {
         logger = org.apache.log4j.Logger.getLogger(DataSenderThread.class.getName());
     }
 
-    public DataSenderThread(ConcurrentLinkedQueue abq, RNode node , Rule rule, String keyinterval) {
+    public DataSenderThread(ConcurrentLinkedQueue abq, RNode node, Rule rule, String keyinterval) {
         this.sendQueue = abq;
         this.node = node;
         this.rule = rule;
@@ -70,10 +71,11 @@ public class DataSenderThread implements Runnable {
         docsSchemaContent = (String) RuntimeEnv.getParam(GlobalVariables.DOCS_SCHEMA_CONTENT);
         msgSchemaName = ((Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SCHEMANAME)).get(topic);
         sendThreadPoolSize = (Integer) RuntimeEnv.getParam(RuntimeEnv.SEND_THREAD_POOL_SIZE);
+        datasenderLimitTime = (Integer) RuntimeEnv.getParam(RuntimeEnv.DATASENDER_LIMITTIME);
         valueToFile = (ConcurrentHashMap<String, Object[]>) RuntimeEnv.getParam(GlobalVariables.VALUE_TO_FILE);
         topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
         sendThreadPool = topicToSendThreadPool.get(rule.getTopic());
-                
+
         int timenum = 0;
 
         while (true) {
@@ -114,7 +116,7 @@ public class DataSenderThread implements Runnable {
                                 road = (String) obj[2];
                             }
                         } else {
-                            logger.info("the sendip and road and f_id for " + topic + " " + serviceName +" " + keyinterval + " " + node.getName() + " is null");
+                            logger.info("the sendip and road and f_id for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " is null");
                         }
                     }
 
@@ -127,23 +129,27 @@ public class DataSenderThread implements Runnable {
                             logger.error(ex, ex);
                         }
                     }
-                    logger.debug("the sendThreadPool for " + topic + " " + serviceName +" "+ keyinterval + " " + node.getName() + " is not full and start a sendtoservicethread");
+                    logger.debug("the sendThreadPool for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " is not full and start a sendtoservicethread");
                     Thread t = new Thread(sendThreadPool, sendT);
-                    t.setName("SendToServiceThread-" + topic + "-"  + serviceName  + "-" + node.getName() + "-" + keyinterval);
+                    t.setName("SendToServiceThread-" + topic + "-" + serviceName + "-" + node.getName() + "-" + keyinterval);
                     t.start();
                 }
             } else {
                 logger.debug("the sendQueue for " + topic + " " + keyinterval + " " + node.getName() + " is empty");
                 if (rule.getType() == 4) {
                     timenum++;
-                    if (timenum >= 900) {
+                    if (timenum >= datasenderLimitTime/2) {
                         Map<RNode, Object> messageTransferStation = MessageTransferStation.getMessageTransferStation();
                         ConcurrentHashMap<String, ConcurrentLinkedQueue> chm = (ConcurrentHashMap<String, ConcurrentLinkedQueue>) messageTransferStation.get(node);
+                        if(chm == null){
+                            break;
+                        }
+                            
                         String is = keyinterval;
                         synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
                             chm.remove(is);
                         }
-                        logger.info("the ConcurrentLinkedQueue for for " + topic + " " + serviceName +" " + keyinterval + " " + node.getName() + " is removed");
+                        logger.info("the ConcurrentLinkedQueue for for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " is removed");
                         break;
                     }
                 }

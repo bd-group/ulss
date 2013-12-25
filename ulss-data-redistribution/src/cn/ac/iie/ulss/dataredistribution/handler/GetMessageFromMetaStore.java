@@ -46,7 +46,8 @@ public class GetMessageFromMetaStore implements Runnable {
 
     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     static Logger logger = null;
-    static Map<String, ArrayList<RNode>> topicToNodes = (Map<String, ArrayList<RNode>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_NODES);
+    Map<String, ArrayList<RNode>> topicToNodes = (Map<String, ArrayList<RNode>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_NODES);
+    Map<String, String> metaToTopic = (Map<String, String>) RuntimeEnv.getParam(GlobalVariables.META_TO_TOPIC);
     int attempSize = 2;
 
     static {
@@ -60,6 +61,7 @@ public class GetMessageFromMetaStore implements Runnable {
         String mszkurl = (String) RuntimeEnv.getParam(RuntimeEnv.METASTORE_ZK_CLUSTER);
         String zkUrl = mszkurl.split("\\|")[0];
         String topic = mszkurl.split("\\|")[1];
+        String ccgroup = mszkurl.split("\\|")[2];
         MetaClientConfig metaClientConfig = new MetaClientConfig();
         final ZkUtils.ZKConfig zkConfig = new ZkUtils.ZKConfig();
         zkConfig.zkConnect = zkUrl;
@@ -68,7 +70,9 @@ public class GetMessageFromMetaStore implements Runnable {
         try {
             sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
 
-            ConsumerConfig cc = new ConsumerConfig("dateredistribution_consumer");
+            ConsumerConfig cc = new ConsumerConfig("dateredistribution" + ccgroup + "_consumer");
+
+            cc.setFetchRunnerCount(1);
 
             final MessageConsumer consumer = sessionFactory.createConsumer(cc);
 
@@ -107,54 +111,59 @@ public class GetMessageFromMetaStore implements Runnable {
                             db_name = (String) msg.getMsg_data().get("db_name");
                             table_name = (String) msg.getMsg_data().get("table_name");
                             version = Long.parseLong((String) msg.getMsg_data().get("version"));
+                            String top = metaToTopic.get(db_name + table_name);
+                            if (topicToNodes.containsKey(top)) {
+                                Object[] o = getChangedRule(db_name, table_name, version);
+                                String keywords = (String) o[0];
+                                String partType = (String) o[1];
+                                int hashNum = 0;
+                                try {
+                                    hashNum = (Integer) o[2];
+                                } catch (Exception ex) {
+                                    logger.error(ex, ex);
+                                }
+                                String topic = (String) o[3];
+                                ArrayList<RNode> alr = topicToNodes.get(topic);
+                                synchronized (alr) {
+                                    if (keywords != null && partType != null && hashNum != 0 && topic != null) {
+                                        ArrayList<Rule> rules = (ArrayList<Rule>) topicToRules.get(topic);
+                                        for (Rule r : rules) {
+                                            if (r.getType() == 4) {
+                                                ArrayList<RNode> oldnurl = r.getNodeUrls();
+                                                Map<RNode, Rule> nodeToRule = (Map<RNode, Rule>) RuntimeEnv.getParam(GlobalVariables.NODE_TO_RULE);
+                                                Map<RNode, Object> messageTransferStation = MessageTransferStation.getMessageTransferStation();
+                                                ArrayList<RNode> nurl = new ArrayList<RNode>();
+                                                for (int i = 0; i < hashNum; i++) {
+                                                    RNode node = new RNode("" + i);
+                                                    node.setHashNum(hashNum);
+                                                    node.setKeywords(keywords);
+                                                    node.setPartType(partType);
+                                                    node.setType(4);
+                                                    nurl.add(node);
+                                                    nodeToRule.put(node, r);
+                                                    alr.add(node);
+                                                    if (!messageTransferStation.containsKey(node)) {
+                                                        ConcurrentHashMap<String, ConcurrentLinkedQueue> chm = new ConcurrentHashMap<String, ConcurrentLinkedQueue>();
+                                                        messageTransferStation.put(node, chm);
+                                                    }
+                                                }
+                                                DynamicAllocate dynamicallocate = new DynamicAllocate();
+                                                dynamicallocate.setNodes(nurl);
+                                                MD5NodeLocator nodelocator = dynamicallocate.getMD5NodeLocator();
 
-                            Object[] o = getChangedRule(db_name, table_name, version);
-                            String keywords = (String) o[0];
-                            String partType = (String) o[1];
-                            int hashNum = 0;
-                            try {
-                                hashNum = (Integer) o[2];
-                            } catch (Exception ex) {
-                                logger.error(ex, ex);
-                            }
-                            String topic = (String) o[3];
-                            ArrayList<RNode> alr = topicToNodes.get(topic);
-                            if (keywords != null && partType != null && hashNum != 0 && topic != null) {
-                                ArrayList<Rule> rules = (ArrayList<Rule>) topicToRules.get(topic);
-                                for (Rule r : rules) {
-                                    if (r.getType() == 4 ){
-                                        ArrayList<RNode> oldnurl = r.getNodeUrls();
-                                        Map<RNode, Rule> nodeToRule = (Map<RNode, Rule>) RuntimeEnv.getParam(GlobalVariables.NODE_TO_RULE);
-                                        Map<RNode, Object> messageTransferStation = MessageTransferStation.getMessageTransferStation();
-                                        ArrayList<RNode> nurl = new ArrayList<RNode>();
-                                        for (int i = 0; i < hashNum; i++) {
-                                            RNode node = new RNode("" + i);
-                                            node.setHashNum(hashNum);
-                                            node.setKeywords(keywords);
-                                            node.setPartType(partType);
-                                            node.setType(4);
-                                            nurl.add(node);
-                                            nodeToRule.put(node, r);
-                                            alr.add(node);
-                                            if (!messageTransferStation.containsKey(node)) {
-                                                ConcurrentHashMap<String, ConcurrentLinkedQueue> chm = new ConcurrentHashMap<String, ConcurrentLinkedQueue>();
-                                                messageTransferStation.put(node, chm);
+                                                r.changerule(nurl, nodelocator, keywords, partType);
+                                                logger.info("change the partitioninfo for " + r.getTopic() + " " + r.getServiceName() + " to " + partType + " " + keywords + " " + hashNum + " successfully!");
+
+                                                RemoveNodeFromMessageTransferStation rnfmts = new RemoveNodeFromMessageTransferStation(r, oldnurl);
+                                                Thread t = new Thread(rnfmts);
+                                                t.start();
                                             }
                                         }
-                                        DynamicAllocate dynamicallocate = new DynamicAllocate();
-                                        dynamicallocate.setNodes(nurl);
-                                        MD5NodeLocator nodelocator = dynamicallocate.getMD5NodeLocator();
 
-                                        r.changerule(nurl, nodelocator, keywords, partType);
-                                        logger.info("change the partitioninfo for " + r.getTopic() + " " + r.getServiceName() + " to " + partType + " " + keywords + " " + hashNum);
-
-                                        RemoveNodeFromMessageTransferStation rnfmts = new RemoveNodeFromMessageTransferStation(r, oldnurl);
-                                        Thread t = new Thread(rnfmts);
-                                        t.start();
+                                    } else {
+                                        logger.error("change the transmit rule for " + db_name + " " + table_name + " " + version + " error!");
                                     }
                                 }
-                            } else {
-                                logger.error("change the transmit rule for " + db_name + " " + table_name + " " + version + " error!");
                             }
 
                             break;

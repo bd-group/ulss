@@ -242,7 +242,7 @@ public class GetFileFromMetaStore {
                 HANDLER_CLIENT_SIZE.decrementAndGet();
                 break;
             } else {
-                logger.debug("Handler Client for get file Size is larger than " + HANDLER_CLIENT_SIZE_MAX);
+                logger.info("Handler Client for get file Size is larger than " + HANDLER_CLIENT_SIZE_MAX);
                 try {
                     Thread.sleep(5000);
                 } catch (InterruptedException ex) {

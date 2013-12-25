@@ -136,14 +136,23 @@ public class TransmitStrandedDataThread implements Runnable {
      * send message whose type is 0
      */
     private void sendToType0(Rule rule, byte[] data) {
-        NodeLocator n0 = rule.getNodelocator();
         String randomstring = generateString(10);
-        if (n0.getNodesNum() > 0) {
-            RNode node = n0.getPrimary(randomstring);
-            ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
-            clq.offer(data);
-        } else {
-            storeStrandedData(rule, data);
+        while (true) {
+            NodeLocator n0 = rule.getNodelocator();
+            if (n0.getNodesNum() > 0) {
+                RNode node = n0.getPrimary(randomstring);
+                ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                clq.offer(data);
+                break;
+            } else {
+//                storeStrandedData(rule, data);
+                logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException ex) {
+                    //do nothing
+                }
+            }
         }
     }
 
@@ -162,14 +171,24 @@ public class TransmitStrandedDataThread implements Runnable {
             }
         }
 
-        NodeLocator n = rule.getNodelocator();
-        if (n.getNodesNum() > 0) {
-            RNode node = n.getPrimary(sb.toString());
-            ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
-            clq.offer(data);
-        } else {
-            storeStrandedData(rule, data);
+        while (true) {
+            NodeLocator n = rule.getNodelocator();
+            if (n.getNodesNum() > 0) {
+                RNode node = n.getPrimary(sb.toString());
+                ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                clq.offer(data);
+                break;
+            } else {
+//                storeStrandedData(rule, data);
+                logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException ex) {
+                    //do nothing
+                }
+            }
         }
+
     }
 
     /**
@@ -179,14 +198,23 @@ public class TransmitStrandedDataThread implements Runnable {
     private void sendToType2(Rule rule, byte[] data, GenericRecord record) {
         String f = rule.getFilters();
         if (isTrue(f, record)) {
-            NodeLocator n = rule.getNodelocator();
-            if (n.getNodesNum() > 0) {
-                String randomstring = generateString(10);
-                RNode node = n.getPrimary(randomstring);
-                ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
-                clq.offer(data);
-            } else {
-                storeStrandedData(rule, data);
+            while (true) {
+                NodeLocator n = rule.getNodelocator();
+                if (n.getNodesNum() > 0) {
+                    String randomstring = generateString(10);
+                    RNode node = n.getPrimary(randomstring);
+                    ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                    clq.offer(data);
+                    break;
+                } else {
+//                storeStrandedData(rule, data);
+                    logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException ex) {
+                        //do nothing
+                    }
+                }
             }
         }
     }
@@ -199,21 +227,30 @@ public class TransmitStrandedDataThread implements Runnable {
         String[] keywords = (rule.getKeywords()).split("\\;");
         String f = rule.getFilters();
         if (isTrue(f, record)) {
-            NodeLocator n3 = rule.getNodelocator();
-            if (n3.getNodesNum() > 0) {
-                StringBuilder sb = new StringBuilder();
-                for (String ss : keywords) {
-                    if (record.get(ss.toLowerCase()) == null) {
-                        sb.append("");
-                    } else {
-                        sb.append((record.get(ss.toLowerCase())).toString());
+            while (true) {
+                NodeLocator n3 = rule.getNodelocator();
+                if (n3.getNodesNum() > 0) {
+                    StringBuilder sb = new StringBuilder();
+                    for (String ss : keywords) {
+                        if (record.get(ss.toLowerCase()) == null) {
+                            sb.append("");
+                        } else {
+                            sb.append((record.get(ss.toLowerCase())).toString());
+                        }
+                    }
+                    RNode node = n3.getPrimary(sb.toString());
+                    ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                    clq.offer(data);
+                    break;
+                } else {
+//                    storeStrandedData(rule, data);
+                    logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException ex) {
+                        //do nothing
                     }
                 }
-                RNode node = n3.getPrimary(sb.toString());
-                ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
-                clq.offer(data);
-            } else {
-                storeStrandedData(rule, data);
             }
         }
     }

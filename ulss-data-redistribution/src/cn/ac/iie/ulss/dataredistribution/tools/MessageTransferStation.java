@@ -46,7 +46,7 @@ public class MessageTransferStation {
      */
     public static void init(ConcurrentHashMap<String, ArrayList<Rule>> topics) {
         logger.info("init the messageTransferStation");
-        
+
         Set topicset = topics.keySet();
         String topickey = null;
         topicToAcceptCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_ACCEPTCOUNT);
@@ -62,7 +62,7 @@ public class MessageTransferStation {
 
             ArrayList<RNode> alr = new ArrayList<RNode>();
             topicToNodes.put(topickey, alr);
-            
+
             ThreadGroup sendThreadPool = new ThreadGroup(topickey);
             topicToSendThreadPool.put(topickey, sendThreadPool);
             ruleSet = (((ConcurrentHashMap<String, ArrayList<Rule>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_RULES)).get(topickey));
@@ -79,7 +79,7 @@ public class MessageTransferStation {
                             messageTransferStation.put(node, clq);
                             String value = null;
                             for (int i = 0; i < datasendersize; i++) {
-                                DataSenderThread dst = new DataSenderThread(clq, node , rule, value);
+                                DataSenderThread dst = new DataSenderThread(clq, node, rule, value);
                                 Thread tdst = new Thread(dst);
                                 tdst.setName("DataSenderThread-" + topickey + "-" + node.getName());
                                 tdst.start();
@@ -108,34 +108,36 @@ public class MessageTransferStation {
      */
     public static void addRule(Rule rule) {
         ArrayList<RNode> alr = topicToNodes.get(rule.getTopic());
-        if (rule.getType() == 0 || rule.getType() == 1 || rule.getType() == 2 || rule.getType() == 3 || rule.getType() == 100) {
-            ArrayList nodeurls = rule.getNodeUrls();
-            for (Iterator itit = nodeurls.iterator(); itit.hasNext();) {
-                RNode node = (RNode) itit.next();
-                nodeToRule.put(node, rule);
-                alr.add(node);
-                if (!messageTransferStation.containsKey(node)) {
-                    int datasendersize = (Integer) RuntimeEnv.getParam(RuntimeEnv.DATASENDER_THREAD);
-                    ConcurrentLinkedQueue clq = new ConcurrentLinkedQueue();
-                    messageTransferStation.put(node, clq);
-                    String value = null;
-                    for (int i = 0; i < datasendersize; i++) {
-                        DataSenderThread dst = new DataSenderThread(clq, node , rule, value);
-                        Thread tdst = new Thread(dst);
-                        tdst.setName("DataSenderThread-" + rule.getTopic() + "-" + node.getName());
-                        tdst.start();
+        synchronized (alr) {
+            if (rule.getType() == 0 || rule.getType() == 1 || rule.getType() == 2 || rule.getType() == 3 || rule.getType() == 100) {
+                ArrayList nodeurls = rule.getNodeUrls();
+                for (Iterator itit = nodeurls.iterator(); itit.hasNext();) {
+                    RNode node = (RNode) itit.next();
+                    nodeToRule.put(node, rule);
+                    alr.add(node);
+                    if (!messageTransferStation.containsKey(node)) {
+                        int datasendersize = (Integer) RuntimeEnv.getParam(RuntimeEnv.DATASENDER_THREAD);
+                        ConcurrentLinkedQueue clq = new ConcurrentLinkedQueue();
+                        messageTransferStation.put(node, clq);
+                        String value = null;
+                        for (int i = 0; i < datasendersize; i++) {
+                            DataSenderThread dst = new DataSenderThread(clq, node, rule, value);
+                            Thread tdst = new Thread(dst);
+                            tdst.setName("DataSenderThread-" + rule.getTopic() + "-" + node.getName());
+                            tdst.start();
+                        }
                     }
                 }
-            }
-        } else if (rule.getType() == 4) {
-            ArrayList nodeurls = rule.getNodeUrls();
-            for (Iterator itit = nodeurls.iterator(); itit.hasNext();) {
-                RNode node = (RNode) itit.next();
-                nodeToRule.put(node, rule);
-                alr.add(node);
-                if (!messageTransferStation.containsKey(node)) {
-                    ConcurrentHashMap<String, ConcurrentLinkedQueue> chm = new ConcurrentHashMap<String, ConcurrentLinkedQueue>();
-                    messageTransferStation.put(node, chm);
+            } else if (rule.getType() == 4) {
+                ArrayList nodeurls = rule.getNodeUrls();
+                for (Iterator itit = nodeurls.iterator(); itit.hasNext();) {
+                    RNode node = (RNode) itit.next();
+                    nodeToRule.put(node, rule);
+                    alr.add(node);
+                    if (!messageTransferStation.containsKey(node)) {
+                        ConcurrentHashMap<String, ConcurrentLinkedQueue> chm = new ConcurrentHashMap<String, ConcurrentLinkedQueue>();
+                        messageTransferStation.put(node, chm);
+                    }
                 }
             }
         }

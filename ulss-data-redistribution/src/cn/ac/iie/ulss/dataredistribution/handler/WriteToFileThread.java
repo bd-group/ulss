@@ -155,7 +155,7 @@ public class WriteToFileThread implements Runnable {
                             count += addcount(msg);
                         } else {
                             count2++;
-                            logger.info("bufferPool'size is 0");
+                            logger.info(topic + " bufferPool'size is 0");
                             if (count2 > 30) {
                                 break;
                             }
@@ -250,36 +250,40 @@ public class WriteToFileThread implements Runnable {
         }
     }
 
-    private synchronized boolean isEmpty() {
+    private boolean isEmpty() {
         Map<RNode, Object> messageTransferStation = MessageTransferStation.getMessageTransferStation();
         ArrayList<RNode> alr = topicToNodes.get(topic);
-        for (RNode n : alr) {
-            if (messageTransferStation.containsKey(n)) {
-                if (n.getType() == 4) {
-                    ConcurrentHashMap<String, ConcurrentLinkedQueue> chm = (ConcurrentHashMap<String, ConcurrentLinkedQueue>) messageTransferStation.get(n);
-                    if (chm != null) {
-                        for (ConcurrentLinkedQueue clq : chm.values()) {
+        synchronized (alr) {
+            Iterator it = alr.iterator();
+            while (it.hasNext()) {
+                RNode n = (RNode) it.next();
+                if (messageTransferStation.containsKey(n)) {
+                    if (n.getType() == 4) {
+                        ConcurrentHashMap<String, ConcurrentLinkedQueue> chm = (ConcurrentHashMap<String, ConcurrentLinkedQueue>) messageTransferStation.get(n);
+                        if (chm != null) {
+                            for (ConcurrentLinkedQueue clq : chm.values()) {
+                                if (!clq.isEmpty()) {
+                                    logger.info("the messageTransferStation for " + topic + " is not empty!");
+                                    return false;
+                                }
+                            }
+                        } else {
+                            logger.info("the chm for " + n + " is null");
+                        }
+                    } else {
+                        ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) messageTransferStation.get(n);
+                        if (clq != null) {
                             if (!clq.isEmpty()) {
                                 logger.info("the messageTransferStation for " + topic + " is not empty!");
                                 return false;
                             }
+                        } else {
+                            logger.info("the clq for " + n + " is null");
                         }
-                    } else {
-                        logger.info("the chm for " + n + " is null");
                     }
                 } else {
-                    ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) messageTransferStation.get(n);
-                    if (clq != null) {
-                        if (!clq.isEmpty()) {
-                            logger.info("the messageTransferStation for " + topic + " is not empty!");
-                            return false;
-                        }
-                    } else {
-                        logger.info("the clq for " + n + " is null");
-                    }
+                    it.remove();
                 }
-            } else {
-                alr.remove(n);
             }
         }
         logger.info("the messageTransferStation for " + topic + " is empty!");

@@ -91,13 +91,11 @@ class DetectTransmitRule implements Runnable {
             if (!addrule.isEmpty()) {
                 logger.info("need to add new rule to the existed topic");
                 addRuleToTopic(addrule);
-                logger.info("add new rule to the existed topic successfully");
             }
 
             if (!addtopic.isEmpty()) {
                 logger.info("need to add new topic");
                 addTopic(addtopic);
-                logger.info("add new topic successfully!");
             }
         }
     }

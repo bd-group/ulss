@@ -20,6 +20,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
@@ -157,14 +159,23 @@ public class TransmitThread implements Runnable {
      * send message whose type is 0
      */
     private void sendToType0(Rule rule, byte[] data) {
-        NodeLocator n0 = rule.getNodelocator();
         String randomstring = generateString(10);
-        if (n0.getNodesNum() > 0) {
-            RNode node = n0.getPrimary(randomstring);
-            ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
-            clq.offer(data);
-        } else {
-            storeStrandedData(rule, data);
+        while (true) {
+            NodeLocator n0 = rule.getNodelocator();
+            if (n0.getNodesNum() > 0) {
+                RNode node = n0.getPrimary(randomstring);
+                ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                clq.offer(data);
+                break;
+            } else {
+//            storeStrandedData(rule, data);
+                logger.error("There is no node for the " + topic + " " + rule.getServiceName());
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException ex) {
+                    //do nothing
+                }
+            }
         }
     }
 
@@ -183,13 +194,22 @@ public class TransmitThread implements Runnable {
             }
         }
 
-        NodeLocator n = rule.getNodelocator();
-        if (n.getNodesNum() > 0) {
-            RNode node = n.getPrimary(sb.toString());
-            ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
-            clq.offer(data);
-        } else {
-            storeStrandedData(rule, data);
+        while (true) {
+            NodeLocator n = rule.getNodelocator();
+            if (n.getNodesNum() > 0) {
+                RNode node = n.getPrimary(sb.toString());
+                ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                clq.offer(data);
+                break;
+            } else {
+//                storeStrandedData(rule, data);
+                logger.error("There is no node for the " + topic + " " + rule.getServiceName());
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException ex) {
+                    //do nothing
+                }
+            }
         }
     }
 
@@ -200,14 +220,23 @@ public class TransmitThread implements Runnable {
     private void sendToType2(Rule rule, byte[] data, GenericRecord record) {
         String f = rule.getFilters();
         if (isTrue(f, record)) {
-            NodeLocator n = rule.getNodelocator();
-            if (n.getNodesNum() > 0) {
-                String randomstring = generateString(10);
-                RNode node = n.getPrimary(randomstring);
-                ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
-                clq.offer(data);
-            } else {
-                storeStrandedData(rule, data);
+            while (true) {
+                NodeLocator n = rule.getNodelocator();
+                if (n.getNodesNum() > 0) {
+                    String randomstring = generateString(10);
+                    RNode node = n.getPrimary(randomstring);
+                    ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                    clq.offer(data);
+                    break;
+                } else {
+//                    storeStrandedData(rule, data);
+                    logger.error("There is no node for the " + topic + " " + rule.getServiceName());
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException ex) {
+                        //do nothing
+                    }
+                }
             }
         }
     }
@@ -220,21 +249,30 @@ public class TransmitThread implements Runnable {
         String[] keywords = (rule.getKeywords()).split("\\;");
         String f = rule.getFilters();
         if (isTrue(f, record)) {
-            NodeLocator n3 = rule.getNodelocator();
-            if (n3.getNodesNum() > 0) {
-                StringBuilder sb = new StringBuilder();
-                for (String ss : keywords) {
-                    if (record.get(ss.toLowerCase()) == null) {
-                        sb.append("");
-                    } else {
-                        sb.append((record.get(ss.toLowerCase())).toString());
+            while (true) {
+                NodeLocator n3 = rule.getNodelocator();
+                if (n3.getNodesNum() > 0) {
+                    StringBuilder sb = new StringBuilder();
+                    for (String ss : keywords) {
+                        if (record.get(ss.toLowerCase()) == null) {
+                            sb.append("");
+                        } else {
+                            sb.append((record.get(ss.toLowerCase())).toString());
+                        }
+                    }
+                    RNode node = n3.getPrimary(sb.toString());
+                    ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                    clq.offer(data);
+                    break;
+                } else {
+//                    storeStrandedData(rule, data
+                    logger.error("There is no node for the " + topic + " " + rule.getServiceName());
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException ex) {
+                        //do nothing
                     }
                 }
-                RNode node = n3.getPrimary(sb.toString());
-                ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
-                clq.offer(data);
-            } else {
-                storeStrandedData(rule, data);
             }
         }
     }
@@ -280,21 +318,21 @@ public class TransmitThread implements Runnable {
 //            if (!vb) {
 //                logger.info("the time in the topic " + topic + " is out-of-date!");
 //            }
-            
+
             synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
                 ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) chm.get(keyinterval);
                 if (clq != null) {
                     clq.offer(data);
                 } else {
                     logger.info("create a abq for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName());
-                    GetFileFromMetaStore gffm = new GetFileFromMetaStore(keyinterval , node , rule);
+                    GetFileFromMetaStore gffm = new GetFileFromMetaStore(keyinterval, node, rule);
                     gffm.getFileForInverval();
                     int datasendertsize = (Integer) RuntimeEnv.getParam(RuntimeEnv.DATASENDER_THREAD);
                     clq = new ConcurrentLinkedQueue();
                     clq.offer(data);
                     chm.put(keyinterval, clq);
                     for (int i = 0; i < datasendertsize; i++) {
-                        DataSenderThread dst = new DataSenderThread(clq, node , rule, keyinterval);
+                        DataSenderThread dst = new DataSenderThread(clq, node, rule, keyinterval);
                         Thread tdst = new Thread(dst);
                         tdst.setName("DataSenderThread-" + topic + "-" + node.getName() + "-" + keyinterval);
                         tdst.start();
