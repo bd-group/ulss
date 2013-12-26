@@ -16,3 +16,34 @@
 !/ulss-se2dw-async/lib
 !/ulss-se2dw-async/ulss-se2db.properties
 !/ulss-se2dw-async/log4j.properties
+<<<<<<< HEAD
+=======
+#ulss-data-redistribution
+/ulss-data-redistribution/*
+!/ulss-data-redistribution/src
+!/ulss-data-redistribution/lib
+!/ulss-data-redistribution/data_redistribution.properties
+!/ulss-data-redistribution/log4j.properties
+!/ulss-data-redistribution/start.sh
+#ulss-data-statistics
+/ulss-data-statistics/*
+!/ulss-data-statistics/src
+!/ulss-data-statistics/lib
+!/ulss-data-statistics/data_statistics_config.properties
+!/ulss-data-statistics/log4j.properties
+>>>>>>> 24e5a68860f09b3e497aadc003941dbdbb6750b8
+#ulss-se2dw-jdbc
+/ulss-se2dw-jdbc/*
+!/ulss-se2dw-jdbc/src
+!/ulss-se2dw-jdbc/lib
+!/ulss-se2dw-jdbc/ulss-se2dw-jdbc.properties
+!/ulss-se2dw-jdbc/log4j.properties
+/ulss-data-se2dw-c3p0/nbproject/private/
+#ulss-se2dw-c3p0
+/ulss-data-se2dw-c3p0
+#/ulss-se2dw-c3p0/*
+#!/ulss-se2dw-c3p0/src
+#!/ulss-se2dw-c3p0/lib
+#!/ulss-se2dw-c3p0/ulss-se2dw.properties
+#!/ulss-se2dw-c3p0/log4j.properties
+#/ulss-data-se2dw-c3p0/nbproject/private/
