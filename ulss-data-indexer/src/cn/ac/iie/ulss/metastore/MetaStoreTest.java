@@ -4,11 +4,15 @@
  */
 package cn.ac.iie.ulss.metastore;
 
+import cn.ac.iie.ulss.indexer.Indexer;
 import devmap.DevMap;
 import iie.metastore.MetaStoreClient;
+import iie.mm.client.ClientAPI;
+import iie.mm.client.ClientConf;
 import java.io.File;
 import java.util.List;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Index;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -30,30 +34,45 @@ public class MetaStoreTest {
         PropertyConfigurator.configure("log4j.properties");
         MetaStoreClient cli = null;
         try {
-            cli = new MetaStoreClient("10.248.65.23", 10101);//10101
+            cli = new MetaStoreClient("192.168.1.14", 10101);//10101
         } catch (MetaException ex) {
             log.error(ex, ex);
         }
         IMetaStoreClient icli = cli.client;
 
+        //List<Database> dbs = cli.client.get_local_attribution();
 
-        SFile f = icli.get_file_by_id(8325);
-        System.out.println(f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED);
 
+        System.out.println(cli.client.get_local_attribution().getParameters().get("mm.url"));
+//        for (Database db : dbs) {
+//            String dbName = db.getName();
+//            String mmurl = db.getParameters().get("mm.url");
+//            if (mmurl != null && !"".equals(mmurl)) {
+//                System.out.println(dbName + " " + mmurl);
+//            } else {
+//                log.info("the mm.url for " + dbName + " is null ");
+//            }
+//        }
+        SFile f = icli.get_file_by_id(2623);
         System.out.println(f);
+        System.out.println(f.getValues().get(0).getValue());
+        System.out.println(f.getValues().get(1));
+        System.out.println(f.getValues().get(2) + "\n\n\n");
+        //System.out.println(f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED);
+        //System.out.println(f);
 
         Table bf_dxx = null;
         try {
             System.out.println(icli.getAllDatabases());
-            bf_dxx = icli.getTable("db1", "wb");
-            System.out.println(icli.getTableNodeGroups("db1", "wb"));
-
-            List<Index> idxList = cli.client.listIndexes("db1", "wb", (short) -1);
+            bf_dxx = icli.getTable("db1", "t_dx_rz_qydx");
+            System.out.println(icli.getTableNodeGroups("db1", "t_dx_rz_qydx"));
+            System.out.println("the size is ..." + cli.client.listTableFiles("db1", "t_dx_rz_qydx", 0, 100000).get(100));
+            List<Index> idxList = cli.client.listIndexes("db1", "t_dx_rz_qydx", (short) -1);
             for (Index ix : idxList) {
                 System.out.println(ix.getIndexName());
             }
 
-            System.out.println("the size is ..." + cli.client.listTableFiles("db1", "t_dx_rz_ccdx", 0, 100000).size());
+
             //System.out.println(idxList);
             //SFile f = icli.get_file_by_id(96);
 

@@ -258,7 +258,6 @@ public class SimpleDaoImpl implements SimpleDao {
         return temp;
     }
 
-    @Override
     public Long getDeferIndexerNum() {
         String sql = "select CUR_INDEXER_NUM from dbk_createdefer_indexer where rownum <2";
         Long temp = getJdbcTemplate().queryForLong(sql);

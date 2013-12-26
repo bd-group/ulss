@@ -9,6 +9,7 @@ import cn.ac.iie.ulss.struct.BloomFileWriter;
 import cn.ac.iie.ulss.struct.DataSourceConfig;
 import cn.ac.iie.ulss.struct.LuceneFileWriter;
 import iie.metastore.MetaStoreClient;
+import iie.mm.client.ClientAPI;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
@@ -38,15 +39,15 @@ public class CreateIndex implements Runnable {
     List<WriteIndexFile> wList;
     List<Thread> wThList;
     MetaStoreClient msCli;
+    ClientAPI ca;
     LuceneFileWriter normalLucWriter;
     BloomFileWriter normalBloWriter;
     final Object lk;
     final Object clientLock;  //用于协调各个线程对client进行操作的锁
     private IndexWriter iw = null;
     private List<SFile> Listsf = null; //实际上有且只有一个文件
-    private String location;
 
-    public CreateIndex(DataSourceConfig dsc, MetaStoreClient msc, ArrayBlockingQueue buf, LuceneFileWriter norLucWriter, long f_id, Object l, Object clientLk) {
+    public CreateIndex(DataSourceConfig dsc, MetaStoreClient msc, ClientAPI capi, ArrayBlockingQueue buf, LuceneFileWriter norLucWriter, long f_id, Object l, Object clientLk) {
         dc = dsc;
         zkUrl = dsc.getZkUrl();
         dbName = dsc.getDbName();
@@ -58,6 +59,7 @@ public class CreateIndex implements Runnable {
         wList = new ArrayList<WriteIndexFile>();
         wThList = new ArrayList<Thread>();
         msCli = msc;
+        ca = capi;
         normalLucWriter = norLucWriter;
         inbuffer = buf;
         file_id = f_id;
@@ -72,7 +74,7 @@ public class CreateIndex implements Runnable {
         {
             Thread[] wT = new Thread[Indexer.writeIndexThreadNum];
             for (int j = 0; j < Indexer.writeIndexThreadNum; j++) {
-                WriteIndexFile wf = new WriteIndexFile(this.dc, inbuffer, this.msCli, normalLucWriter, normalBloWriter, this.clientLock);
+                WriteIndexFile wf = new WriteIndexFile(this.dc, inbuffer, this.msCli, this.ca, normalLucWriter, normalBloWriter, this.clientLock);
                 Thread t = new Thread(wf);
                 t.setName(tbName + "_" + "w" + "_" + j + "_" + file_id);
                 wT[j] = t;
@@ -97,7 +99,7 @@ public class CreateIndex implements Runnable {
                 break;
             }
             try {
-                Thread.sleep(250);
+                Thread.sleep(10);
             } catch (InterruptedException ex) {
             }
             if (this.inbuffer.isEmpty()) {
@@ -105,7 +107,7 @@ public class CreateIndex implements Runnable {
             } else {
                 noDataCount = 0;
             }
-            if (noDataCount / 2 >= 4 * Indexer.maxDelaySeconds) { //连续循环检测1200次发现数据都是空的，表明在这段时间内（300秒）都没有数据发送过来，那么文件就自动关闭
+            if (noDataCount / 2 >= 100 * Indexer.maxDelaySeconds) { //连续循环检测1200次发现数据都是空的，表明在这段时间内（300秒）都没有数据发送过来，那么文件就自动关闭
                 isEnd.set(true);
             }
 

@@ -66,6 +66,6 @@ public class DBMeta {
 
     public static void main(String[] args) {
         DBMeta imd = new DBMeta();
-        System.out.println(imd.getDocSchema());
+        System.out.println(imd.getAllSchema());
     }
 }

@@ -13,8 +13,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import org.apache.hadoop.hive.metastore.api.FOFailReason;
 import org.apache.hadoop.hive.metastore.api.FileOperationException;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.SFile;
@@ -48,11 +47,17 @@ public class MetastoreWrapper {
                 isOver = true;
             } catch (FileOperationException e) {
                 log.error("when close file get warn:" + e, e);
-                tmp = makeSureGetFile(tmp.getFid(), new StringBuilder());
-                if (tmp != null && tmp.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
+                if (e.getReason() == FOFailReason.NOTEXIST) {
+                    log.warn("get file:" + sf.getFid() + " fail,because it does not exist，so it has been closed successfully");
                     return true;
                 } else {
-                    return false;
+                    tmp = makeSureGetFile(tmp.getFid(), new StringBuilder());
+                    if (tmp != null && (tmp.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE)) {
+                        log.warn("when close file " + sf.getFid() + " get warn,the file status is " + tmp.getStore_status());
+                        return true;
+                    } else {
+                        return false;
+                    }
                 }
             } catch (TException e) {
                 log.error(e, e);
@@ -132,19 +137,23 @@ public class MetastoreWrapper {
         try {
             File file = new File(path);
             String[] ss = file.list();
-            String s = "";
             if (ss != null) {
-                for (int i = 0; i < ss.length; i++) {
-                    long file_id = Long.parseLong(ss[i]);
-                    s = readFileInfo(path, file_id);
-                    long record_num = Long.parseLong(s.split("-")[0]);
-                    long length = Long.parseLong(s.split("-")[1]);
-                    if (MetastoreWrapper.makeSureCloseUnclosedFile(file_id, record_num, length)) {
-                        File f = new File(path + "/" + file_id); //删除磁盘上的部分相关信息
-                        f.deleteOnExit();
-                        log.info("now close the file " + file_id + " " + f.getAbsolutePath() + " and delete the unresolved information done, is it exists now ? " + f.exists());
-                    } else {
+                try {
+                    for (int i = 0; i < ss.length; i++) {
+                        long file_id = Long.parseLong(ss[i]);
+                        String s = readFileInfo(path, file_id);
+                        log.info("will retry close the file for file " + path + "/" + file_id + ",and the file information is " + s);
+                        long record_num = Long.parseLong(s.split("-")[0]);
+                        long length = Long.parseLong(s.split("-")[1]);
+                        if (MetastoreWrapper.makeSureCloseUnclosedFile(file_id, record_num, length)) {
+                            File f = new File(path + "/" + file_id); //删除磁盘上的部分相关信息
+                            f.delete();
+                            log.info("now close the file " + file_id + " " + f.getAbsolutePath() + " and delete the unresolved information done, is it exists now ? " + f.exists());
+                        } else {
+                        }
                     }
+                } catch (Exception e) {
+                    log.error(e);
                 }
             }
         } catch (Exception e) {
@@ -153,14 +162,13 @@ public class MetastoreWrapper {
     }
 
     public static void writeFileInfo(String path, long fid, long record_num, long length) {
-        File file = new File(path + "/" + fid + "");
-        if (file.exists()) {
-            log.warn("when write the unclosed file information for " + fid + " error,the information  has existed.will delete it ");
-            file.delete();
-        }
-        FileOutputStream out = null;
         try {
-            out = new FileOutputStream(file);
+            File file = new File(path + "/" + fid + "");
+            if (file.exists()) {
+                log.warn("when write the unclosed file information for " + fid + " error,the information  has existed.will delete it ");
+                file.delete();
+            }
+            FileOutputStream out = new FileOutputStream(file);
             out.write((record_num + "-" + length).getBytes());
             out.close();
         } catch (FileNotFoundException ex) {
@@ -173,10 +181,12 @@ public class MetastoreWrapper {
     public static String readFileInfo(String path, long fid) {
         String s = "";
         File file = new File(path + "/" + fid + "");
+        log.info("read file info for " + path + "/" + fid);
         try {
             FileReader f = new FileReader(file);
             BufferedReader bur = new BufferedReader(f);
             while ((s = bur.readLine()) != null) {
+                break;
             }
             f.close();
             bur.close();
@@ -280,8 +290,12 @@ public class MetastoreWrapper {
                 sf = Indexer.cli.client.get_file_by_id(file_id);
                 isOver = true;
             } catch (FileOperationException e) {
-                log.error(e, e);
                 isOver = false;
+                if (e.getReason() == FOFailReason.NOTEXIST) {
+                    log.error("the file not exist: " + file_id + " " + e, e);
+                } else {
+                    log.error(e, e);
+                }
                 return null;
             } catch (TException e) {
                 log.error(e, e);
@@ -310,5 +324,19 @@ public class MetastoreWrapper {
         }
         s = s.append(message);
         return sf;
+    }
+
+    public static void main(String[] args) {
+        //System.out.println(MetastoreWrapper.readFileInfo(".", 1).split("-")[1]);
+        File f = new File("2_5_1"); //删除磁盘上的部分相关信息
+        f.delete();
+        while (true) {
+            log.info("now close the file " + f.getAbsolutePath() + " and delete the unresolved information done, is it exists now ? " + f.exists());
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException ex) {
+                System.out.println(ex);
+            }
+        }
     }
 }

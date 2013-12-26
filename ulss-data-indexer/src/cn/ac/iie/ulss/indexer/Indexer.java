@@ -3,6 +3,8 @@ package cn.ac.iie.ulss.indexer;
 import cn.ac.iie.ulss.metastore.DBMeta;
 import cn.ac.iie.ulss.util.Configure;
 import iie.metastore.MetaStoreClient;
+import iie.mm.client.ClientAPI;
+import iie.mm.client.ClientConf;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.List;
@@ -47,7 +49,7 @@ public class Indexer {
     public static int httpServerPool = 50;
     public static int intervalWriterKey = -1;
     public static int writeInnerpoolSize = 2;
-    public static int bufSize = 20;
+    public static int readbufSize = 20;
     public static int maxDelaySeconds = 200;
     public static int commitgab = 200;
     /**/
@@ -55,6 +57,7 @@ public class Indexer {
     public static ConcurrentHashMap<String, Schema> schemaname2Schema = new ConcurrentHashMap<String, Schema>(20, 0.8f);
     /**/
     public static ConcurrentHashMap<String, Table> tablename2Table = new ConcurrentHashMap<String, Table>(10, 0.8f);  //db+table name 到table对象的映射
+    public static ConcurrentHashMap<String, ClientAPI> ClientAPIMap = new ConcurrentHashMap<String, ClientAPI>(10, 0.8f);  //db+table name 到table对象的映射
     public static ConcurrentHashMap<String, List<Index>> tablename2indexs = new ConcurrentHashMap<String, List<Index>>(10, 0.8f);
     /**/
     public static ConcurrentHashMap<String, String> tablename2Schemaname = new ConcurrentHashMap<String, String>(10, 0.8f);  //schema的名字到name到table对象的映射
@@ -79,7 +82,8 @@ public class Indexer {
     public static void initSchema() {
         List<List<String>> schema2tableList = Indexer.imd.getSchema2table();
         for (int i = 0; i < schema2tableList.size(); i++) {
-            Indexer.tablename2Schemaname.put(schema2tableList.get(i).get(1).toLowerCase(), schema2tableList.get(i).get(0).toLowerCase());
+            log.info("put " + schema2tableList.get(i).get(0).toLowerCase().trim() + "---" + schema2tableList.get(i).get(1).toLowerCase().trim() + " to tablename2Schemaname map");
+            Indexer.tablename2Schemaname.put(schema2tableList.get(i).get(0).toLowerCase().trim(), schema2tableList.get(i).get(1).toLowerCase().trim());
         }
 
         String schemaName = "";
@@ -90,7 +94,7 @@ public class Indexer {
             List<List<String>> allSchema = imd.getAllSchema();
             for (List<String> list : allSchema) {
                 schemaName = list.get(0).toLowerCase();
-                schemaContent = list.get(1).toLowerCase();
+                schemaContent = list.get(1).toLowerCase().trim();
                 log.debug("schema " + schemaName + "'s content is:\n" + schemaContent);
                 if (schemaName.equals("docs")) {
                     log.info("init schema docs ...");
@@ -147,12 +151,11 @@ public class Indexer {
 
         Indexer.writeIndexThreadNum = cfg.getIntProperty("writeNumPerRead");
         Indexer.writeInnerpoolSize = cfg.getIntProperty("writeBufNum");
-        Indexer.bufSize = cfg.getIntProperty("readBufNum");
+        Indexer.readbufSize = cfg.getIntProperty("readBufNum");
         Indexer.httpServerPool = cfg.getIntProperty("httpServerPoolNum");
         Indexer.maxDelaySeconds = cfg.getIntProperty("maxDelayTime");
         Indexer.commitgab = cfg.getIntProperty("commitgab");
 
-        //Indexer.zc = new ZkClient(Indexer.offsetZkUrl);
         try {
             Indexer.cli = new MetaStoreClient(metaStoreCientUrl, metaStoreCientPort);
         } catch (MetaException ex) {
@@ -163,6 +166,14 @@ public class Indexer {
             List<Database> dbs = cli.client.get_all_attributions();
             for (Database db : dbs) {
                 String dbName = db.getName();
+                String mmurl = db.getParameters().get("mm.url");
+                if (mmurl != null && !"".equals(mmurl)) {
+                    ClientConf cc = new ClientConf();
+                    ClientAPI ca = new ClientAPI(cc);
+                    ca.init(mmurl);
+                    Indexer.ClientAPIMap.put(dbName, ca);
+                    log.info("the mm.url for " + dbName + " is " + mmurl);
+                }
                 List<String> tbList = cli.client.getAllTables(dbName);
                 for (String tbName : tbList) {
                     Table tb = cli.client.getTable(dbName, tbName);

@@ -15,7 +15,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -53,6 +55,7 @@ public class HttpDataHandler extends AbstractHandler {
     private static Schema docsSchema = null;
     private static DatumReader<GenericRecord> docsReader = null;
     private static AtomicLong receiveIntotal = new AtomicLong(0);
+    private static SimpleDateFormat secondFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     /*
      */
     public static ConcurrentHashMap<Long, String> id2cachefile = new ConcurrentHashMap<Long, String>();
@@ -61,7 +64,6 @@ public class HttpDataHandler extends AbstractHandler {
     public static ConcurrentHashMap<Long, Long> closedIdMap = new ConcurrentHashMap<Long, Long>();
     public static final Object o = new Object();
     public static final Object clientLock = new Object();
-    public static long count = 0l;
 
     @Override
     public void handle(String string, Request rqst, HttpServletRequest hsr, HttpServletResponse hsResonse) {
@@ -69,7 +71,6 @@ public class HttpDataHandler extends AbstractHandler {
             rqst.setHandled(true);
             String action = rqst.getHeader("cmd");
             log.info("handle the http request " + action);
-            count++;
 
             if (action.startsWith("createfile")) {
                 synchronized (HttpDataHandler.o) {
@@ -141,9 +142,6 @@ public class HttpDataHandler extends AbstractHandler {
                 String devId = action.split("[|]")[2];
                 String cacheFileName = "";
                 synchronized (HttpDataHandler.o) {
-                    if (count % 500 == 0) {
-                        log.info("now the increate state file num is " + id2Createindex.size() + "，and the file ids are " + id2Createindex.keySet());
-                    }
                     try {                                                            /*不包括这个file_id的话证明对应的create线程已经结束或者还没有开始，那么就要进行创建*/
                         if (!HttpDataHandler.id2Createindex.containsKey(file_id)) {  //与CreateIndex中的HttpDataHandler.key2Createindex.remove(sf.getFid()) 语句同步?
                             List<SFile> luceneFileList = new ArrayList<SFile>();
@@ -178,7 +176,20 @@ public class HttpDataHandler extends AbstractHandler {
                             String fullPath = dm.getPath(devId, filelocation);
                             log.info("will get the lucene file from disk,the fullpath is " + fullPath);
 
-                            DataSourceConfig ds = new DataSourceConfig(Indexer.zkUrl, db, tb, "timeLable", "metaQtopic", null);
+                            String stTime = "";
+                            String edTime = "";
+                            for (int j = 0; j < 2; j++) {
+                                long time = Long.parseLong(sf.getValues().get(j).getValue().trim()) * 1000;
+                                Date d = new Date();
+                                d.setTime(time);
+                                if (j == 0) {
+                                    stTime = secondFormat.format(d);
+                                } else {
+                                    edTime = secondFormat.format(d);
+                                }
+                            }
+                            log.info("now set the time flag for file " + file_id + "to " + stTime + "_" + edTime);
+                            DataSourceConfig ds = new DataSourceConfig(Indexer.zkUrl, db, tb, stTime + "_" + edTime, "metaQtopic", null);
                             ConcurrentHashMap<Integer, IndexWriter> hashWriterMap = new ConcurrentHashMap<Integer, IndexWriter>();
                             ConcurrentHashMap<Integer, List<SFile>> luceneSFMap = new ConcurrentHashMap<Integer, List<SFile>>();
 
@@ -191,8 +202,8 @@ public class HttpDataHandler extends AbstractHandler {
                             hashWriterMap.put(0, FSWriter);
                             luceneSFMap.put(0, luceneFileList);
                             LuceneFileWriter writer = new LuceneFileWriter(hashWriterMap, luceneSFMap);
-                            ArrayBlockingQueue buf = new ArrayBlockingQueue(Indexer.bufSize);
-                            CreateIndex c = new CreateIndex(ds, Indexer.cli, buf, writer, file_id, HttpDataHandler.o, HttpDataHandler.clientLock);
+                            ArrayBlockingQueue buf = new ArrayBlockingQueue(Indexer.readbufSize);
+                            CreateIndex c = new CreateIndex(ds, Indexer.cli, Indexer.ClientAPIMap.get(ds.getDbName()), buf, writer, file_id, HttpDataHandler.o, HttpDataHandler.clientLock);
                             Thread ct = new Thread(c);
                             ct.setName(ds.getDbName() + "_" + ds.getTbName() + "_" + file_id);
                             ct.start();
@@ -321,7 +332,7 @@ public class HttpDataHandler extends AbstractHandler {
         try {
             int countC = 0;
             countC = HttpDataHandler.getBadData(Indexer.cachePath, Indexer.cli);
-            log.info("get unresolved data from the disk for match，get number is " + countC);
+            log.info("get unresolved data from the disk for index，get number is " + countC);
         } catch (Exception ex) {
             log.error("when get unresolved data error occurs: " + ex, ex);
         }
@@ -361,7 +372,7 @@ public class HttpDataHandler extends AbstractHandler {
     public static int getBadData(String rawDataPath, MetaStoreClient cli) throws IOException, FileOperationException, MetaException, TException, InterruptedException {
         File file = new File(rawDataPath);
         String[] nameList = file.list(new FileFilter(".*\\.ori"));
-        int count = 0;
+        int countc = 0;
         if (nameList == null) {
             log.info("get ori file number is 0");
             return -1;
@@ -393,15 +404,32 @@ public class HttpDataHandler extends AbstractHandler {
             List<SFile> luceneFileList = new ArrayList<SFile>();
             luceneFileList.add(recoverSf);
 
-            DataSourceConfig ds = new DataSourceConfig(Indexer.zkUrl, db, tb, "", "", null);
+            String stTime = "";
+            String edTime = "";
+            for (int j = 0; j < 2; j++) {
+                long time = Long.parseLong(sf.getValues().get(j).getValue().trim()) * 1000;
+                Date d = new Date();
+                d.setTime(time);
+                if (j == 0) {
+                    stTime = secondFormat.format(d);
+                } else {
+                    edTime = secondFormat.format(d);
+                }
+            }
+            log.info("now set the time flag for file " + file_id + " to " + stTime + "_" + edTime);
+            DataSourceConfig ds = new DataSourceConfig(Indexer.zkUrl, db, tb, stTime + "_" + edTime, "", null);
             ConcurrentHashMap<Integer, IndexWriter> hashWriterMap = new ConcurrentHashMap<Integer, IndexWriter>();
             ConcurrentHashMap<Integer, List<SFile>> luceneSFMap = new ConcurrentHashMap<Integer, List<SFile>>();
             IndexWriter FSWriter = LuceneWriterUtil.getSimpleLuceneWriter(fullFilePath, false);
+            if (FSWriter == null) {
+                log.warn("when get the lucene file writer,get null for " + file_id + " and the full path is " + fullFilePath);
+                continue;
+            }
             hashWriterMap.put(0, FSWriter);
             luceneSFMap.put(0, luceneFileList);
             LuceneFileWriter writer = new LuceneFileWriter(hashWriterMap, luceneSFMap);
-            ArrayBlockingQueue buf = new ArrayBlockingQueue(50);
-            CreateIndex c = new CreateIndex(ds, cli, buf, writer, file_id, HttpDataHandler.o, HttpDataHandler.clientLock);
+            ArrayBlockingQueue buf = new ArrayBlockingQueue(Indexer.readbufSize);
+            CreateIndex c = new CreateIndex(ds, Indexer.cli, Indexer.ClientAPIMap.get(ds.getDbName()), buf, writer, file_id, HttpDataHandler.o, HttpDataHandler.clientLock);
             Thread ct = new Thread(c);
             ct.setName(ds.getDbName() + "_" + ds.getTbName() + "_" + file_id);
             ct.start();
@@ -414,8 +442,8 @@ public class HttpDataHandler extends AbstractHandler {
                     log.error(ex, ex);
                 }
             }
-
             String rawFileFullName = rawDataPath + "/" + nameList[i];
+            log.info("will use file " + rawFileFullName + " to recover the data ...");
             File f = new File(rawFileFullName);
             DataFileReader<GenericRecord> dataFileReader = new DataFileReader<GenericRecord>(f, docsReader);
             if (dataFileReader != null) {
@@ -427,7 +455,7 @@ public class HttpDataHandler extends AbstractHandler {
             log.info("now will erase the cache raw file information for " + rawFileFullName);
             f.renameTo(new File(rawFileFullName + ".good")); //最后要rename
         }
-        return count;
+        return countc;
     }
 
     public static String getPathDirs(String filelocation) {
