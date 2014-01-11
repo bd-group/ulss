@@ -148,8 +148,7 @@ public class DataSenderThread implements Runnable {
                         String is = keyinterval;
                         synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
                             chm.remove(is);
-                        }
-                        logger.info("the ConcurrentLinkedQueue for for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " is removed");
+                        } 
                         break;
                     }
                 }
@@ -161,6 +160,7 @@ public class DataSenderThread implements Runnable {
                 }
             }
         }
+        logger.info("the ConcurrentLinkedQueue for for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " is removed");
     }
 
     /**
@@ -183,7 +183,7 @@ public class DataSenderThread implements Runnable {
                 count++;
             } else {
                 try {
-                    Thread.sleep(50);
+                    Thread.sleep(2);
                 } catch (InterruptedException ex) {
                     //do nothing
                 }

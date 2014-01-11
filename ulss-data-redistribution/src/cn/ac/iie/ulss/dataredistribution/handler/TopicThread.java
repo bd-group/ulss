@@ -2,7 +2,6 @@ package cn.ac.iie.ulss.dataredistribution.handler;
 
 import cn.ac.iie.ulss.dataredistribution.commons.GlobalVariables;
 import cn.ac.iie.ulss.dataredistribution.commons.RuntimeEnv;
-import static cn.ac.iie.ulss.dataredistribution.handler.WriteToFileThread.logger;
 import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -13,7 +12,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import org.apache.avro.Protocol;
@@ -41,8 +39,6 @@ public class TopicThread implements Runnable {
 
     String topic = null;
     ArrayList<Rule> ruleSet = null;
-    LinkedBlockingQueue bufferPool = null;
-    Integer bufferPoolSize = 0;
     ConcurrentLinkedQueue dataPool = null;
     Protocol protocol = null;
     Schema docsschema = null;
@@ -79,6 +75,14 @@ public class TopicThread implements Runnable {
         } else {
             dataPool = new ConcurrentLinkedQueue();
 
+            fileName = dataDir + "backup/" + topic + ".bk";
+            fsmit = new File(fileName);
+            if (fsmit.exists()) {
+                logger.info("handlering the leaving data for the topic " + topic);
+                handlerLeavingData(fsmit);
+                logger.info("handler the leaving data for the topic " + topic + " successfully");
+            }
+
             for (int i = 0; i < ((Integer) RuntimeEnv.getParam(RuntimeEnv.TRANSMIT_THREAD)); i++) {
                 TransmitThread dtm = new TransmitThread(dataPool, ruleSet, topic);
                 Thread tdtm = new Thread(dtm);
@@ -88,28 +92,10 @@ public class TopicThread implements Runnable {
 
             logger.info("begin pull data for the topic " + topic + " from metaq");
             acceptData();
-
-            for (int i = 0; i < ((Integer) RuntimeEnv.getParam(RuntimeEnv.WRITE_TO_FILE_THREAD)); i++) {
-                fileName = dataDir + "backup/" + topic + i + ".bk";
-                fsmit = new File(fileName);
-
-                if (fsmit.exists()) {
-                    logger.info("handlering the leaving data for the topic " + topic);
-                    handlerLeavingData(fsmit);
-                    logger.info("handler the leaving data for the topic " + topic + " successfully");
-                }
-
-                logger.info("starting writing to file for the topic " + topic);
-                WriteToFileThread wtf = new WriteToFileThread(bufferPool, fsmit, dataPool, topic);
-                Thread twtf = new Thread(wtf);
-                twtf.setName("WriteToFileThread-" + topic + " " + i);
-                twtf.start();
-            }
         }
     }
 
     private void init() {
-        bufferPoolSize = (Integer) RuntimeEnv.getParam(RuntimeEnv.BUFFER_POOL_SIZE);
         msgSchemaContent = ((Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SCHEMACONTENT)).get(topic);
         docsSchemaContent = (String) RuntimeEnv.getParam(GlobalVariables.DOCS_SCHEMA_CONTENT);
         ruleSet = (ArrayList<Rule>) (((ConcurrentHashMap<String, ArrayList<Rule>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_RULES)).get(topic));
@@ -123,10 +109,9 @@ public class TopicThread implements Runnable {
      * accept data from the metaq
      */
     private void acceptData() {
-        bufferPool = new LinkedBlockingQueue(bufferPoolSize);
         String zkUrl = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
         logger.info("pulling the data from zk: " + zkUrl + " topic: " + topic);
-        DataAccepterThread dataAccepter = new DataAccepterThread(zkUrl, topic, bufferPool);
+        DataAccepterThread dataAccepter = new DataAccepterThread(zkUrl, topic, dataPool);
         Thread tda = new Thread(dataAccepter);
         tda.setName("DataAccepterThread-" + topic);
         tda.start();

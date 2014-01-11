@@ -77,10 +77,10 @@ public class GetRuleFromDB {
         tgmfms.setName("GetMessageFromMetaStore");
         tgmfms.start();
         
-        DetectTransmitRule dtr = new DetectTransmitRule();
-        Thread tdtr = new Thread(dtr);
-        tdtr.setName("DetectTransmitRule");
-        tdtr.start();
+//        DetectTransmitRule dtr = new DetectTransmitRule();
+//        Thread tdtr = new Thread(dtr);
+//        tdtr.setName("DetectTransmitRule");
+//        tdtr.start();
         
         AcceptCountThread act = new AcceptCountThread();
         Thread tact = new Thread(act);

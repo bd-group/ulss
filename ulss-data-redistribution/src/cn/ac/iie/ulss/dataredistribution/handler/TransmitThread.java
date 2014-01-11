@@ -20,8 +20,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
@@ -317,6 +315,7 @@ public class TransmitThread implements Runnable {
 //
 //            if (!vb) {
 //                logger.info("the time in the topic " + topic + " is out-of-date!");
+//                return;
 //            }
 
             synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {

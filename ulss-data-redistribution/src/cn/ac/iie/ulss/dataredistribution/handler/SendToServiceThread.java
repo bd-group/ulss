@@ -131,7 +131,7 @@ public class SendToServiceThread implements Runnable {
                     } catch (InterruptedException ex1) {
                     }
                 } catch (Exception ex) {
-                    logger.info("send message for " + topic + " " + serviceName + " to the " + url + "failed + timeout" + ex, ex);
+                    logger.info("send " + count + " message for " + topic + " " + serviceName + " to the " + url + "failed + timeout" + ex, ex);
                     flag = -1;
                     break;
                 }
@@ -144,13 +144,13 @@ public class SendToServiceThread implements Runnable {
                         response.getEntity().writeTo(out);
                         String resonseEn = new String(out.toByteArray());
                         if ("-1".equals(resonseEn.split("[\n]")[0])) {
-                            logger.error("send messages for " + topic + " " + serviceName + " to the " + url + " failed because the service return a wrong infomation " + resonseEn);
+                            logger.error("send " + count + " messages for " + topic + " " + serviceName + " to the " + url + " failed because the service return a wrong infomation " + resonseEn);
                             EntityUtils.consume(response.getEntity());
                             continue;
                         } else {
                             AtomicLong al = ruleToCount.get(topic + serviceName);
                             Long l = al.addAndGet(count);
-                            logger.info("send messages for " + topic + " " + serviceName + " to the " + url + " successfully and the total number is " + l);
+                            logger.info("send " + count + " messages for " + topic + " " + serviceName + " to the " + url + " successfully and the total number is " + l);
                             EntityUtils.consume(response.getEntity());
                             break;
                         }
@@ -213,7 +213,7 @@ public class SendToServiceThread implements Runnable {
                     } catch (InterruptedException ex1) {
                     }
                 } catch (Exception ex) {
-                    logger.info("send messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + "timeout" + ex, ex);
+                    logger.info("send " + count + " messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + "timeout" + ex, ex);
                     flag2 = -1;
                     break;
                 }
@@ -226,19 +226,19 @@ public class SendToServiceThread implements Runnable {
                         response.getEntity().writeTo(out);
                         String resonseEn = new String(out.toByteArray());
                         if ("-1".equals(resonseEn.split("[\n]")[0])) {
-                            logger.info("send messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + "failed because the service return a wrong infomation " + resonseEn);
+                            logger.info("send " + count + " messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + "failed because the service return a wrong infomation " + resonseEn);
                             flag = -1;
                             EntityUtils.consume(response.getEntity());
                             continue;
                         } else if ("-2".equals(resonseEn.split("[\n]")[0])) {
-                            logger.info("send messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + "failed because the service return a wrong infomation " + resonseEn);
+                            logger.info("send " + count + " messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + "failed because the service return a wrong infomation " + resonseEn);
                             flag = -2;
                             EntityUtils.consume(response.getEntity());
                             continue;
                         } else {
                             AtomicLong al = ruleToCount.get(topic + serviceName);
                             Long l = al.addAndGet(count);
-                            logger.info("send messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + " successfully and the total number is " + l);
+                            logger.info("send " + count + " messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + " successfully and the total number is " + l);
                             EntityUtils.consume(response.getEntity());
                             break;
                         }
@@ -451,30 +451,31 @@ public class SendToServiceThread implements Runnable {
                 valueToFile.put(topic + keyinterval + node.getName(), ob);
                 logger.info("choose the " + topic + " " + keyinterval + " " + node.getName() + ob);
 
-                Object[] o = new Object[6];
+                Object[] o = new Object[8];
                 o[0] = node;
                 o[1] = sendIP;
                 o[2] = keyinterval;
                 o[3] = f_id;
                 o[4] = road;
                 o[5] = count;
-                ConcurrentHashMap<Map<Rule, byte[]>, Object[]> strandedDataSend = (ConcurrentHashMap<Map<Rule, byte[]>, Object[]>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_SEND);
-                Map<Rule, byte[]> m2 = new HashMap<Rule, byte[]>();
-                m2.put(rule, sendData);
-                strandedDataSend.put(m2, o);
+                o[6] = rule;
+                o[7] = sendData;
+                ConcurrentLinkedQueue<Object[]> strandedDataSend = (ConcurrentLinkedQueue<Object[]>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_SEND);
+                strandedDataSend.add(o);
+                logger.info("choose the " + topic + " " + keyinterval + " " + node.getName() + o);
             } else {
-                Object[] o = new Object[6];
+                Object[] o = new Object[8];
                 o[0] = node;
                 o[1] = newsendIP;
                 o[2] = keyinterval;
                 o[3] = newf_id;
                 o[4] = newroad;
                 o[5] = count;
-                ConcurrentHashMap<Map<Rule, byte[]>, Object[]> strandedDataSend = (ConcurrentHashMap<Map<Rule, byte[]>, Object[]>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_SEND);
-                Map<Rule, byte[]> m2 = new HashMap<Rule, byte[]>();
-                m2.put(rule, sendData);
-                strandedDataSend.put(m2, o);
-                logger.debug("choose the " + topic + " " + keyinterval + " " + node.getName() + o);
+                o[6] = rule;
+                o[7] = sendData;
+                ConcurrentLinkedQueue<Object[]> strandedDataSend = (ConcurrentLinkedQueue<Object[]>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_SEND);
+                strandedDataSend.add(o);
+                logger.info("choose the " + topic + " " + keyinterval + " " + node.getName() + o);
             }
         }
     }

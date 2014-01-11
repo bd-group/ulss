@@ -189,7 +189,9 @@ class DetectTransmitRule implements Runnable {
         for (Rule r : newrule) {
             MessageTransferStation.addRule(r);
             ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(r.getTopic());
-            set.add(r);
+            synchronized (set) {
+                set.add(r);
+            }
         }
     }
 
@@ -200,14 +202,16 @@ class DetectTransmitRule implements Runnable {
             if (topicToRules.containsKey(r.getTopic())) {
                 MessageTransferStation.addRule(r);
                 ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(r.getTopic());
-                set.add(r);
+                synchronized (set) {
+                    set.add(r);
+                }
             } else {
                 Map<String, ThreadGroup> topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
                 ThreadGroup sendThreadPool = new ThreadGroup(r.getTopic());
                 topicToSendThreadPool.put(r.getTopic(), sendThreadPool);
                 ArrayList<RNode> alr = new ArrayList<RNode>();
                 topicToNodes.put(r.getTopic(), alr);
-                
+
                 MessageTransferStation.addRule(r);
                 ArrayList<Rule> set = new ArrayList<Rule>();
                 set.add(r);

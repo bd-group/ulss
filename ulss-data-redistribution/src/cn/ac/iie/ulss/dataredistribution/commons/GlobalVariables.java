@@ -98,6 +98,10 @@ public class GlobalVariables {
         byte[] synDetectNode = new byte[0];
         RuntimeEnv.addParam(SYN_DETECT_NODE, synDetectNode);
 
+        logger.info("setting the topicToSendThreadPool to the Global Variables");
+        Map<String, ThreadGroup> topicToSendThreadPool = new HashMap<String, ThreadGroup>();
+        RuntimeEnv.addParam(TOPIC_TO_SEND_THREADPOOL, topicToSendThreadPool);
+
         logger.info("setting the topicToAcceptCount to the Global Variables");
         ConcurrentHashMap<String, AtomicLong[]> topicToAcceptCount = new ConcurrentHashMap<String, AtomicLong[]>();
         RuntimeEnv.addParam(TOPIC_TO_ACCEPTCOUNT, topicToAcceptCount);
@@ -118,32 +122,6 @@ public class GlobalVariables {
         ConcurrentHashMap<String, Object[]> valueToFile = new ConcurrentHashMap<String, Object[]>();
         RuntimeEnv.addParam(VALUE_TO_FILE, valueToFile);
 
-        logger.info("setting the detectNodeList and detectNode to the Global Variables");
-        ConcurrentLinkedQueue<Object[]> detectNodeList = new ConcurrentLinkedQueue<Object[]>();
-        RuntimeEnv.addParam(DETECT_NODELIST, detectNodeList);
-        ArrayList<RNode> detectNode = new ArrayList<RNode>();
-        RuntimeEnv.addParam(DETECT_NODE, detectNode);
-        HandlerDetectNodeThread hd = new HandlerDetectNodeThread(detectNodeList);
-        Thread thd = new Thread(hd);
-        thd.setName("HandlerDetectNodeThread");
-        thd.start();
-
-        logger.info("setting the strandedDataTransmit for retransmit to the Global Variables");
-        ConcurrentLinkedQueue<Object[]> strandedDataTransmit = new ConcurrentLinkedQueue<Object[]>();
-        RuntimeEnv.addParam(STRANDED_DATA_TRANSMIT, strandedDataTransmit);
-        TransmitStrandedDataThread tsdt = new TransmitStrandedDataThread(strandedDataTransmit);
-        Thread ttsdt = new Thread(tsdt);
-        ttsdt.setName("TransmitStrandedDataThread");
-        ttsdt.start();
-
-        logger.info("setting the strandedDataSend for send to the Global Variables");
-        ConcurrentHashMap<Map<Rule, byte[]>, Object[]> strandedDataSend = new ConcurrentHashMap<Map<Rule, byte[]>, Object[]>();
-        RuntimeEnv.addParam(STRANDED_DATA_SEND, strandedDataSend);
-        SendStrandedDataThread ss = new SendStrandedDataThread(strandedDataSend);
-        Thread tss = new Thread(ss);
-        tss.setName("SendStrandedDataThread");
-        tss.start();
-
         logger.info("setting the strandedDataStore for store to the Global Variables");
         ConcurrentHashMap<Rule, ConcurrentLinkedQueue> strandedDataStore = new ConcurrentHashMap<Rule, ConcurrentLinkedQueue>();
         RuntimeEnv.addParam(STRANDED_DATA_STORE, strandedDataStore);
@@ -155,10 +133,6 @@ public class GlobalVariables {
         logger.info("setting the unvalidDataStore for store to the Global Variables");
         ConcurrentHashMap<Rule, ConcurrentLinkedQueue> unvalidDataStore = new ConcurrentHashMap<Rule, ConcurrentLinkedQueue>();
         RuntimeEnv.addParam(UNVALID_DATA_STORE, unvalidDataStore);
-
-        logger.info("setting the topicToSendThreadPool to the Global Variables");
-        Map<String, ThreadGroup> topicToSendThreadPool = new HashMap<String, ThreadGroup>();
-        RuntimeEnv.addParam(TOPIC_TO_SEND_THREADPOOL, topicToSendThreadPool);
 
         logger.info("setting the topicToSchemaContent to the Global Variables");
         Map<String, String> topicToSchemaContent = new HashMap<String, String>();
@@ -187,13 +161,39 @@ public class GlobalVariables {
         logger.info("setting the TopicToSynCount to the Global Variables");
         Map<String, byte[]> TopicToSynCount = new HashMap<String, byte[]>();
         RuntimeEnv.addParam(TOPIC_TO_SYN_COUNT, TopicToSynCount);
-        
+
         logger.info("setting the TopicToHttpclient to the Global Variables");
         Map<String, HttpClient> TopicToHttpclient = new HashMap<String, HttpClient>();
         RuntimeEnv.addParam(TOPIC_TO_HTTPCLIENT, TopicToHttpclient);
-        
+
         logger.info("setting the topicToNodes to the Global Variables");
         Map<String, ArrayList<RNode>> topicToNodes = new HashMap<String, ArrayList<RNode>>();
         RuntimeEnv.addParam(TOPIC_TO_NODES, topicToNodes);
+
+        logger.info("setting the detectNodeList and detectNode to the Global Variables");
+        ConcurrentLinkedQueue<Object[]> detectNodeList = new ConcurrentLinkedQueue<Object[]>();
+        RuntimeEnv.addParam(DETECT_NODELIST, detectNodeList);
+        ArrayList<RNode> detectNode = new ArrayList<RNode>();
+        RuntimeEnv.addParam(DETECT_NODE, detectNode);
+        HandlerDetectNodeThread hd = new HandlerDetectNodeThread(detectNodeList);
+        Thread thd = new Thread(hd);
+        thd.setName("HandlerDetectNodeThread");
+        thd.start();
+
+        logger.info("setting the strandedDataTransmit for retransmit to the Global Variables");
+        ConcurrentLinkedQueue<Object[]> strandedDataTransmit = new ConcurrentLinkedQueue<Object[]>();
+        RuntimeEnv.addParam(STRANDED_DATA_TRANSMIT, strandedDataTransmit);
+        TransmitStrandedDataThread tsdt = new TransmitStrandedDataThread(strandedDataTransmit);
+        Thread ttsdt = new Thread(tsdt);
+        ttsdt.setName("TransmitStrandedDataThread");
+        ttsdt.start();
+
+        logger.info("setting the strandedDataSend for send to the Global Variables");
+        ConcurrentLinkedQueue<Object[]> strandedDataSend = new ConcurrentLinkedQueue<Object[]>();
+        RuntimeEnv.addParam(STRANDED_DATA_SEND, strandedDataSend);
+        SendStrandedDataThread ss = new SendStrandedDataThread(strandedDataSend);
+        Thread tss = new Thread(ss);
+        tss.setName("SendStrandedDataThread");
+        tss.start();
     }
 }

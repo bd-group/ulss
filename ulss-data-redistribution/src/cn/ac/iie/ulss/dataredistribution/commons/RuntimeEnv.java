@@ -15,10 +15,10 @@ public class RuntimeEnv {
 
     public static final String DB_CLUSTER = "dbCluster";
     public static final String ZK_CLUSTER = "zkCluster";
-    public static final String BUFFER_POOL_SIZE = "bufferPoolSize";
+//    public static final String BUFFER_POOL_SIZE = "bufferPoolSize";
     public static final String DATA_POOL_SIZE = "dataPoolSize";
     public static final String SEND_POOL_SIZE = "sendPoolSize";
-    public static final String WRITE_TO_FILE_THREAD = "writeToFileThread";
+//    public static final String WRITE_TO_FILE_THREAD = "writeToFileThread";
     public static final String TRANSMIT_THREAD = "transmitThread";
     public static final String DATASENDER_THREAD = "datasenderThread";
     public static final String DATASENDER_LIMITTIME = "datasenderLimitTime";
@@ -67,13 +67,13 @@ public class RuntimeEnv {
         logger.info("get zkCluster " + zkCluster);
         dynamicParams.put(ZK_CLUSTER, zkCluster);
 
-        int bufferPoolSize = conf.getInt(BUFFER_POOL_SIZE, 100);
-        if (bufferPoolSize <= 0) {
-            logger.error("parameter bufferPoolSize is a wrong number");
-            return false;
-        }
-        logger.info("get bufferPoolSize " + bufferPoolSize);
-        dynamicParams.put(BUFFER_POOL_SIZE, bufferPoolSize);
+//        int bufferPoolSize = conf.getInt(BUFFER_POOL_SIZE, 100);
+//        if (bufferPoolSize <= 0) {
+//            logger.error("parameter bufferPoolSize is a wrong number");
+//            return false;
+//        }
+//        logger.info("get bufferPoolSize " + bufferPoolSize);
+//        dynamicParams.put(BUFFER_POOL_SIZE, bufferPoolSize);
 
         int dataPoolSize = conf.getInt(DATA_POOL_SIZE, 1000);
         if (dataPoolSize <= 0) {
@@ -91,13 +91,13 @@ public class RuntimeEnv {
         logger.info("get sendPoolSize " + sendPoolSize);
         dynamicParams.put(SEND_POOL_SIZE, sendPoolSize);
 
-        int writeToFileThread = conf.getInt(WRITE_TO_FILE_THREAD, 5);
-        if (writeToFileThread <= 0) {
-            logger.error("parameter writeToFileThread is a wrong number");
-            return false;
-        }
-        logger.info("get writeToFileThread " + writeToFileThread);
-        dynamicParams.put(WRITE_TO_FILE_THREAD, writeToFileThread);
+//        int writeToFileThread = conf.getInt(WRITE_TO_FILE_THREAD, 5);
+//        if (writeToFileThread <= 0) {
+//            logger.error("parameter writeToFileThread is a wrong number");
+//            return false;
+//        }
+//        logger.info("get writeToFileThread " + writeToFileThread);
+//        dynamicParams.put(WRITE_TO_FILE_THREAD, writeToFileThread);
 
         int transmitThread = conf.getInt(TRANSMIT_THREAD, 5);
         if (transmitThread <= 0) {

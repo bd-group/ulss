@@ -9,8 +9,7 @@ import cn.ac.iie.ulss.dataredistribution.commons.RuntimeEnv;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
 import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import org.apache.log4j.PropertyConfigurator;
 
 /**
@@ -19,7 +18,7 @@ import org.apache.log4j.PropertyConfigurator;
  */
 public class SendStrandedDataThread implements Runnable {
 
-    ConcurrentHashMap<Map<Rule, byte[]>, Object[]> strandedDataSend = null;
+    ConcurrentLinkedQueue<Object[]> strandedDataSend = null;
     Map<String, ThreadGroup> topicToSendThreadPool = null;
     ThreadGroup sendThreadPool = null;
     static org.apache.log4j.Logger logger = null;
@@ -30,7 +29,7 @@ public class SendStrandedDataThread implements Runnable {
         logger = org.apache.log4j.Logger.getLogger(SendStrandedDataThread.class.getName());
     }
 
-    public SendStrandedDataThread(ConcurrentHashMap<Map<Rule, byte[]>, Object[]> strandedDataSend) {
+    public SendStrandedDataThread(ConcurrentLinkedQueue<Object[]> strandedDataSend) {
         this.strandedDataSend = strandedDataSend;
     }
 
@@ -39,43 +38,37 @@ public class SendStrandedDataThread implements Runnable {
         topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
 
         while (true) {
-            if (strandedDataSend.isEmpty()) {
+            Object[] o = strandedDataSend.poll();
+            if (o == null) {
                 try {
-                    Thread.sleep(5000);
+                    Thread.sleep(2000);
                 } catch (InterruptedException ex) {
                     logger.error(ex, ex);
                 }
             } else {
-                Set<Map<Rule, byte[]>> al = strandedDataSend.keySet();
-                for (Map<Rule, byte[]> m : al) {
-                    Object[] o = strandedDataSend.get(m);
-                    RNode node = (RNode) o[0];
-                    String sendIP = (String) o[1];
-                    String keyinterval = (String) o[2];
-                    Long f_id = (Long) o[3];
-                    String road = (String) o[4];
-                    int count = (Integer) o[5];
-                    Set<Rule> sr = m.keySet();
-                    for (Rule r : sr) {
-                        if (r == null) {
-                            continue;
-                        }
-                        sendThreadPool = topicToSendThreadPool.get(r.getTopic());
-                        while (sendThreadPool.activeCount() >= sendThreadPoolSize) {
-                            logger.debug("the sendThreadPool for strandedData is full...");
-                            try {
-                                Thread.sleep(500);
-                            } catch (InterruptedException ex) {
-                                logger.error(ex, ex);
-                            }
-                        }
-                        SendToServiceThread sst = new SendToServiceThread(m.get(r), node, r, sendIP, keyinterval, f_id, road, count);
-                        Thread tsst = new Thread(sendThreadPool, sst);
-                        tsst.setName("DataSenderThread-" + r.getTopic() + "-" + node.getName() + "-" + keyinterval);
-                        tsst.start();
+                RNode node = (RNode) o[0];
+                String sendIP = (String) o[1];
+                String keyinterval = (String) o[2];
+                Long f_id = (Long) o[3];
+                String road = (String) o[4];
+                int count = (Integer) o[5];
+                Rule r = (Rule) o[6];
+                byte[] data = (byte[]) o[7];
+
+                sendThreadPool = topicToSendThreadPool.get(r.getTopic());
+                while (sendThreadPool.activeCount() >= sendThreadPoolSize) {
+                    logger.debug("the sendThreadPool for strandedData is full...");
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException ex) {
+                        logger.error(ex, ex);
                     }
-                    strandedDataSend.remove(m);
                 }
+                SendToServiceThread sst = new SendToServiceThread(data, node, r, sendIP, keyinterval, f_id, road, count);
+                Thread tsst = new Thread(sendThreadPool, sst);
+                tsst.setName("SendToServiceThread-" + r.getTopic() + "-" + node.getName() + "-" + keyinterval);
+                tsst.start();
+                logger.info("begin to send " + count + " strandedData for " + r.getTopic() + "-" + node.getName() + "-" + keyinterval + " to " + sendIP);
             }
         }
     }
