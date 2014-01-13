@@ -33,6 +33,8 @@ public class MessageTransferStation {
     static Map<String, ThreadGroup> topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
     static Map<RNode, Rule> nodeToRule = (Map<RNode, Rule>) RuntimeEnv.getParam(GlobalVariables.NODE_TO_RULE);
     static Map<String, ArrayList<RNode>> topicToNodes = (Map<String, ArrayList<RNode>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_NODES);
+    static Map<String, AtomicLong> topicToPackage = (Map<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_PACKAGE);
+    static ConcurrentHashMap<String, AtomicLong> ruleToCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_COUNT);
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -54,6 +56,9 @@ public class MessageTransferStation {
         for (Iterator it = topicset.iterator(); it.hasNext();) {
             topickey = (String) it.next();
 
+            AtomicLong pac = new AtomicLong(0);
+            topicToPackage.put(topickey, pac);
+                    
             HttpClient httpclient = HttpConnectionManager.getHttpClient(sendThreadPoolSize);
             topicToHttpclient.put(topickey, httpclient);
 
@@ -67,6 +72,9 @@ public class MessageTransferStation {
             topicToSendThreadPool.put(topickey, sendThreadPool);
             ruleSet = (((ConcurrentHashMap<String, ArrayList<Rule>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_RULES)).get(topickey));
             for (Rule rule : ruleSet) {
+                AtomicLong rulecount = new AtomicLong(0);
+                ruleToCount.put(rule.getTopic() + rule.getServiceName(), rulecount);
+                
                 if (rule.getType() == 0 || rule.getType() == 1 || rule.getType() == 2 || rule.getType() == 3 || rule.getType() == 100) {
                     ArrayList nodeurls = rule.getNodeUrls();
                     for (Iterator itit = nodeurls.iterator(); itit.hasNext();) {

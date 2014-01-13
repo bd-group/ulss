@@ -93,7 +93,7 @@ public class TransmitStrandedDataThread implements Runnable {
         try {
             docsGr = docsreader.read(null, docsdecoder);
         } catch (IOException ex) {
-            logger.info((new Date()) + " split the data package from the topic " + rule.getTopic() + " in the dataPool wrong " + ex, ex);
+            logger.info("split the data package from the topic " + rule.getTopic() + " in the dataPool wrong " + ex, ex);
             storeUselessData(rule.getTopic(), sendData);
             return;
         }
@@ -148,7 +148,7 @@ public class TransmitStrandedDataThread implements Runnable {
 //                storeStrandedData(rule, data);
                 logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
                 try {
-                    Thread.sleep(5000);
+                    Thread.sleep(2000);
                 } catch (InterruptedException ex) {
                     //do nothing
                 }
@@ -182,7 +182,7 @@ public class TransmitStrandedDataThread implements Runnable {
 //                storeStrandedData(rule, data);
                 logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
                 try {
-                    Thread.sleep(5000);
+                    Thread.sleep(2000);
                 } catch (InterruptedException ex) {
                     //do nothing
                 }
@@ -210,7 +210,7 @@ public class TransmitStrandedDataThread implements Runnable {
 //                storeStrandedData(rule, data);
                     logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
                     try {
-                        Thread.sleep(5000);
+                        Thread.sleep(2000);
                     } catch (InterruptedException ex) {
                         //do nothing
                     }
@@ -246,7 +246,7 @@ public class TransmitStrandedDataThread implements Runnable {
 //                    storeStrandedData(rule, data);
                     logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
                     try {
-                        Thread.sleep(5000);
+                        Thread.sleep(2000);
                     } catch (InterruptedException ex) {
                         //do nothing
                     }
@@ -307,27 +307,27 @@ public class TransmitStrandedDataThread implements Runnable {
         return false;
     }
 
-    /**
-     *
-     * place the startded data to the strandedDataStore
-     */
-    private void storeStrandedData(Rule rule, byte[] data) {
-        ConcurrentHashMap<Rule, ConcurrentLinkedQueue> strandedDataStore = (ConcurrentHashMap<Rule, ConcurrentLinkedQueue>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_STORE);
-        synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_STRANDEDDATA)) {
-            if (strandedDataStore.containsKey(rule)) {
-                ConcurrentLinkedQueue clq = strandedDataStore.get(rule);
-                clq.offer(data);
-            } else {
-                ConcurrentLinkedQueue sdQueue = new ConcurrentLinkedQueue();
-                sdQueue.offer(data);
-                strandedDataStore.put(rule, sdQueue);
-                StoreStrandedDataThread sdt = new StoreStrandedDataThread(sdQueue, rule);
-                Thread tsdt = new Thread(sdt);
-                tsdt.start();
-                logger.info("start a StoreStrandedDataThread for " + rule.getTopic());
-            }
-        }
-    }
+//    /**
+//     *
+//     * place the startded data to the strandedDataStore
+//     */
+//    private void storeStrandedData(Rule rule, byte[] data) {
+//        ConcurrentHashMap<Rule, ConcurrentLinkedQueue> strandedDataStore = (ConcurrentHashMap<Rule, ConcurrentLinkedQueue>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_STORE);
+//        synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_STRANDEDDATA)) {
+//            if (strandedDataStore.containsKey(rule)) {
+//                ConcurrentLinkedQueue clq = strandedDataStore.get(rule);
+//                clq.offer(data);
+//            } else {
+//                ConcurrentLinkedQueue sdQueue = new ConcurrentLinkedQueue();
+//                sdQueue.offer(data);
+//                strandedDataStore.put(rule, sdQueue);
+//                StoreStrandedDataThread sdt = new StoreStrandedDataThread(sdQueue, rule);
+//                Thread tsdt = new Thread(sdt);
+//                tsdt.start();
+//                logger.info("start a StoreStrandedDataThread for " + rule.getTopic());
+//            }
+//        }
+//    }
 
     /**
      *

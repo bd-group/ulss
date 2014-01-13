@@ -110,7 +110,6 @@ public class TopicThread implements Runnable {
      */
     private void acceptData() {
         String zkUrl = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
-        logger.info("pulling the data from zk: " + zkUrl + " topic: " + topic);
         DataAccepterThread dataAccepter = new DataAccepterThread(zkUrl, topic, dataPool);
         Thread tda = new Thread(dataAccepter);
         tda.setName("DataAccepterThread-" + topic);
@@ -136,7 +135,7 @@ public class TopicThread implements Runnable {
                 try {
                     docsGr = docsreader.read(null, docsdecoder);
                 } catch (IOException ex) {
-                    logger.info(" split the data package from the topic " + topic + " in the dataPool wrong " + ex, ex);
+                    logger.info("split the data package from the topic " + topic + " from the file wrong " + ex, ex);
                 }
                 msgSet = (GenericData.Array<GenericRecord>) docsGr.get(GlobalVariables.DOC_SET);
                 msgitor = msgSet.iterator();

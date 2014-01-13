@@ -19,8 +19,8 @@ import org.apache.http.params.HttpParams;
  * @author evan
  */
 public class HttpConnectionManager {
-    static final int TIMEOUT = 1000;//连接超时时间
-    static final int SO_TIMEOUT = 20000;//数据传输超时
+    static final int TIMEOUT = 5000;//连接超时时间
+    static final int SO_TIMEOUT = 60000;//数据传输超时
     
     public static DefaultHttpClient getHttpClient(int PoolSize) {
         SchemeRegistry schemeRegistry = new SchemeRegistry();

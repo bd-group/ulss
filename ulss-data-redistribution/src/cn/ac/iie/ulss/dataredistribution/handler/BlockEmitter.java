@@ -50,6 +50,7 @@ public class BlockEmitter {
     String dataDir = null;
 //    Integer writeToFileThread = 0;
     Integer activeThreadCount = 0;
+    Long activePackageLimit = 0L;
     Map<String, ThreadGroup> topicToSendThreadPool = null;
     ThreadGroup sendThreadPool = null;
     Protocol protocol = null;
@@ -71,6 +72,8 @@ public class BlockEmitter {
     AtomicBoolean changeFile = new AtomicBoolean(false);
     SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmss");
     AtomicLong time = new AtomicLong(0);
+    Map<String, AtomicLong> topicToPackage = null;
+    AtomicLong packagecount = new AtomicLong(0);
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -88,7 +91,7 @@ public class BlockEmitter {
         dataPoolSize = (Integer) RuntimeEnv.getParam(RuntimeEnv.DATA_POOL_SIZE);
         dataDir = (String) RuntimeEnv.getParam(RuntimeEnv.DATA_DIR);
 //        writeToFileThread = (Integer) RuntimeEnv.getParam(RuntimeEnv.WRITE_TO_FILE_THREAD);
-        activeThreadCount = (Integer) RuntimeEnv.getParam(RuntimeEnv.ACTIVE_THREAD_COUNT);
+//        activeThreadCount = (Integer) RuntimeEnv.getParam(RuntimeEnv.ACTIVE_THREAD_COUNT);
         topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
         sendThreadPool = topicToSendThreadPool.get(topic);
         protocol = Protocol.parse(docsSchemaContent);
@@ -100,6 +103,8 @@ public class BlockEmitter {
         topicToAcceptCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_ACCEPTCOUNT);
         acceptCount = topicToAcceptCount.get(topic);
         topicToNodes = (Map<String, ArrayList<RNode>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_NODES);
+        topicToPackage = (Map<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_PACKAGE);
+        packagecount = topicToPackage.get(topic);
 
         File out = new File(dataDir + "backup");
         synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_DIR)) {
@@ -126,7 +131,7 @@ public class BlockEmitter {
                 try {
                     dxr = dxreader.read(null, dxdecoder);
                 } catch (Exception ex) {
-                    logger.info(" the schema of the data is wrong, can not be writen into the file " + fsmit.getName());
+                    logger.info(" the schema of the data is wrong, can not be writen into the file " + fsmit.getName() + ex,ex);
                     storeUselessData(topic, msg);
                     return;
                 }
@@ -180,8 +185,8 @@ public class BlockEmitter {
     }
 
     private void checkEnvironment() {
-        while (!dataPool.isEmpty() || sendThreadPool.activeCount() > activeThreadCount || !isEmpty()) {
-            logger.info(topic + " dataPool's size is " + dataPool.size() + " and the activeSendThreadCount's size is " + sendThreadPool.activeCount()
+        while (!dataPool.isEmpty() || packagecount.get() > activePackageLimit || sendThreadPool.activeCount() > activeThreadCount || !isEmpty()) {
+            logger.info(topic + " dataPool's size is " + dataPool.size() + " and the packagecount is " + packagecount.get() + " and the activeSendThreadCount's size is " + sendThreadPool.activeCount()
                     + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
                     + "MessageTransferStation is " + numOfQueues());
             try {
@@ -191,11 +196,10 @@ public class BlockEmitter {
             }
         }
 
-        logger.info(topic + " dataPool's size is " + dataPool.size() + " and the activeSendThreadCount's size is " + sendThreadPool.activeCount()
-                + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
-                + "MessageTransferStation is " + numOfQueues());
+        logger.info(topic + " dataPool's size is " + dataPool.size() + " and the packagecount is " + packagecount.get() + " and the activeSendThreadCount's size is " + sendThreadPool.activeCount()
+                    + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
+                    + "MessageTransferStation is " + numOfQueues());
 
-        
         count.set(0);
         String f = fsmit.getName();
         if (fsmit.exists()) {
@@ -287,7 +291,7 @@ public class BlockEmitter {
         try {
             docsGr = docsreader.read(null, docsdecoder);
         } catch (IOException ex) {
-            logger.info(" split the data package from the topic " + topic + " in the dataPool wrong " + ex, ex);
+            logger.info("split the data package from the topic " + topic + " in the dataPool wrong " + ex, ex);
             storeUselessData(topic, msg);
         }
         msgSet = (GenericData.Array<GenericRecord>) docsGr.get(GlobalVariables.DOC_SET);
@@ -327,8 +331,8 @@ public class BlockEmitter {
     public long getTime() {
         return time.get();
     }
-    
-    public long getCount(){
+
+    public long getCount() {
         return count.get();
     }
 }

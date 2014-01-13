@@ -68,7 +68,7 @@ public class SendStrandedDataThread implements Runnable {
                 Thread tsst = new Thread(sendThreadPool, sst);
                 tsst.setName("SendToServiceThread-" + r.getTopic() + "-" + node.getName() + "-" + keyinterval);
                 tsst.start();
-                logger.info("begin to send " + count + " strandedData for " + r.getTopic() + "-" + node.getName() + "-" + keyinterval + " to " + sendIP);
+                logger.info("begin to send " + count + " strandeddata for " + r.getTopic() + "-" + node.getName() + "-" + keyinterval + " to " + sendIP);
             }
         }
     }

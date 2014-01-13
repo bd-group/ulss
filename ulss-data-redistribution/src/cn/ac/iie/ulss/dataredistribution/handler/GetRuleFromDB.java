@@ -82,10 +82,10 @@ public class GetRuleFromDB {
 //        tdtr.setName("DetectTransmitRule");
 //        tdtr.start();
         
-        AcceptCountThread act = new AcceptCountThread();
+        CountThread act = new CountThread();
         Thread tact = new Thread(act);
         tact.setName("AcceptCountThread");
-        tact.start();
+        tact.start();    
     }
 
     /**
@@ -172,10 +172,6 @@ public class GetRuleFromDB {
                 if (region != null) {
                     region = region.trim();
                 }
-                
-                ConcurrentHashMap<String, AtomicLong> ruleToCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_COUNT);
-                AtomicLong al = new AtomicLong(0);
-                ruleToCount.put(topic + serviceName, al);
                 
                 MD5NodeLocator nodelocator = null;
                 String[] IPList = null;

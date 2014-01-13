@@ -14,6 +14,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.log4j.PropertyConfigurator;
 
 /**
@@ -29,6 +30,9 @@ public class DetectAcceptTimeout implements Runnable {
     Integer activeThreadCount = 0;
     ThreadGroup sendThreadPool = null;
     Map<String, ArrayList<RNode>> topicToNodes = null;
+    Map<String, AtomicLong> topicToPackage = null;
+    AtomicLong packagecount = new AtomicLong(0);
+    Long activePackageLimit = 0L;
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -46,20 +50,24 @@ public class DetectAcceptTimeout implements Runnable {
     public void run() {
         topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
         sendThreadPool = topicToSendThreadPool.get(topic);
-        activeThreadCount = (Integer) RuntimeEnv.getParam(RuntimeEnv.ACTIVE_THREAD_COUNT);
+//        activeThreadCount = (Integer) RuntimeEnv.getParam(RuntimeEnv.ACTIVE_THREAD_COUNT);
         topicToNodes = (Map<String, ArrayList<RNode>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_NODES);
+        topicToPackage = (Map<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_PACKAGE);
+        packagecount = topicToPackage.get(topic);
+
         long time = 0L;
         long count = 0L;
         while (true) {
-            while (!dataPool.isEmpty() || sendThreadPool.activeCount() > activeThreadCount || !isEmpty()) {
-                logger.info(topic + " dataPool's size is " + dataPool.size() + " and the activeSendThreadCount's size is " + sendThreadPool.activeCount()
+            while (!dataPool.isEmpty() || packagecount.get() > activePackageLimit || sendThreadPool.activeCount() > activeThreadCount || !isEmpty()) {
+                logger.info(topic + " dataPool's size is " + dataPool.size() + " and the packagecount is " + packagecount.get() + " and the activeSendThreadCount's size is " + sendThreadPool.activeCount()
                         + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
                         + "MessageTransferStation is " + numOfQueues());
                 try {
-                    Thread.sleep(5000);
+                    Thread.sleep(2000);
                 } catch (InterruptedException ex) {
                     //donothing
                 }
+
                 count = 0L;
             }
 

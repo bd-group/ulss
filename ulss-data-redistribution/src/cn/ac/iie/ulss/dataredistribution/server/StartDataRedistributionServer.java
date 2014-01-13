@@ -6,10 +6,16 @@ import cn.ac.iie.ulss.dataredistribution.config.Configuration;
 import cn.ac.iie.ulss.dataredistribution.handler.GetRuleFromDB;
 import cn.ac.iie.ulss.dataredistribution.tools.GetSchemaFromDB;
 import cn.ac.iie.ulss.dataredistribution.tools.GetTBNameFromDB;
+import com.taobao.metamorphosis.client.consumer.MessageConsumer;
+import com.taobao.metamorphosis.exception.MetaClientException;
+import java.io.File;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *
@@ -72,5 +78,66 @@ public class StartDataRedistributionServer {
         GetTBNameFromDB.getTBNameFromDB();
         GetRuleFromDB gr = new GetRuleFromDB();
         gr.start();
+
+        doShutDownWork();
+    }
+
+    private static void doShutDownWork() {
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            public void run() {
+                Map<String, MessageConsumer> topicToConsumer = (Map<String, MessageConsumer>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_CONSUMER);
+                for (String t : topicToConsumer.keySet()) {
+                    MessageConsumer mc = topicToConsumer.get(t);
+                    while (true) {
+                        try {
+                            mc.shutdown();
+                            logger.info("shutdown the metaq consumer for " + t);
+                            break;
+                        } catch (MetaClientException ex) {
+                            logger.error("cann't shutdown the metaq consumer for " + t + ex, ex);
+                        }
+                    }
+                }
+
+                String dataDir = (String) RuntimeEnv.getParam(RuntimeEnv.DATA_DIR);
+
+                File out = new File(dataDir + "backup");
+                synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_DIR)) {
+                    if (!out.exists() && !out.isDirectory()) {
+                        out.mkdirs();
+                        logger.info("create the directory " + dataDir + "backup");
+                    }
+                }
+
+                for (String t : topicToConsumer.keySet()) {
+                    File fbk = new File(dataDir + "backup/" + t + ".bk");
+                    while (true) {
+                        if (fbk.exists()) {
+                            logger.info("the data for topic " + t + " has not been processed completely");
+                            try {
+                                Thread.sleep(2000);
+                            } catch (InterruptedException ex) {
+                                //donothing
+                            }
+                            continue;
+                        } else {
+                            logger.info("the data for topic " + t + " has been processed completely");
+                        }
+                        break;
+                    }
+                }
+                
+                try {
+                    Thread.sleep(20000);
+                } catch (InterruptedException ex) {
+                    //donothing
+                }
+
+                ConcurrentHashMap<String, AtomicLong> topicToAcceptCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_ACCEPTCOUNT);
+                for (String topic : topicToAcceptCount.keySet()) {
+                    logger.info("accept " + topicToAcceptCount.get(topic) + " messages from the topic " + topic);
+                }
+            }
+        });
     }
 }

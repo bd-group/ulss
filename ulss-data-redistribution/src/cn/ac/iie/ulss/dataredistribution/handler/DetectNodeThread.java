@@ -42,9 +42,6 @@ public class DetectNodeThread implements Runnable {
         this.data = data;
     }
 
-    public DetectNodeThread() {
-    }
-
     /**
      *
      * detect the node by using the true data until it is connected

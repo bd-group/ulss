@@ -1,5 +1,7 @@
 package cn.ac.iie.ulss.dataredistribution.handler;
 
+import cn.ac.iie.ulss.dataredistribution.commons.GlobalVariables;
+import cn.ac.iie.ulss.dataredistribution.commons.RuntimeEnv;
 import com.taobao.metamorphosis.Message;
 import com.taobao.metamorphosis.client.MessageSessionFactory;
 import com.taobao.metamorphosis.client.MetaClientConfig;
@@ -11,6 +13,7 @@ import com.taobao.metamorphosis.exception.MetaClientException;
 import com.taobao.metamorphosis.utils.ZkUtils;
 import org.apache.log4j.PropertyConfigurator;
 import java.text.SimpleDateFormat;
+import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 import org.apache.log4j.Logger;
@@ -25,6 +28,7 @@ public class DataAccepterThread implements Runnable {
     String zkUrl = null;
     String topic = null;
     ConcurrentLinkedQueue dataPool = null;
+    Map<String, MessageConsumer> topicToConsumer = null;
     static Logger logger = null;
     
     static {
@@ -40,6 +44,7 @@ public class DataAccepterThread implements Runnable {
     
     @Override
     public void run() {
+        topicToConsumer = (Map<String, MessageConsumer>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_CONSUMER);
         pullDataFromQ();
     }
 
@@ -73,6 +78,8 @@ public class DataAccepterThread implements Runnable {
             consumer.subscribe(topic, 10 * 1024 * 1024, new MessageListenerImpl(emitter));
             
             consumer.completeSubscribe();
+            
+            topicToConsumer.put(topic, consumer);
         } catch (MetaClientException ex) {
             logger.error(ex, ex);
         }

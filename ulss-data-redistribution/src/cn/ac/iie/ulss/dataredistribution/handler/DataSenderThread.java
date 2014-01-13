@@ -15,6 +15,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
@@ -46,6 +47,7 @@ public class DataSenderThread implements Runnable {
     ConcurrentHashMap<String, Object[]> valueToFile = null;
     int datasenderLimitTime = 0;
     int sendThreadPoolSize = 0;
+    Map<String, AtomicLong> topicToPackage = null;
     Rule rule = null;
     int count = 0;
     static org.apache.log4j.Logger logger = null;
@@ -75,7 +77,8 @@ public class DataSenderThread implements Runnable {
         valueToFile = (ConcurrentHashMap<String, Object[]>) RuntimeEnv.getParam(GlobalVariables.VALUE_TO_FILE);
         topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
         sendThreadPool = topicToSendThreadPool.get(rule.getTopic());
-
+        topicToPackage = (Map<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_PACKAGE);
+//        AtomicLong packagecount = topicToPackage.get(topic);
         int timenum = 0;
 
         while (true) {
@@ -84,6 +87,7 @@ public class DataSenderThread implements Runnable {
             String road = "";
             byte[] sendData;
             if (!sendQueue.isEmpty()) {
+//                packagecount.incrementAndGet();
                 timenum = 0;
                 sendData = pack(sendQueue);
                 if (sendData != null) {
@@ -134,21 +138,22 @@ public class DataSenderThread implements Runnable {
                     t.setName("SendToServiceThread-" + topic + "-" + serviceName + "-" + node.getName() + "-" + keyinterval);
                     t.start();
                 }
+//                packagecount.decrementAndGet();
             } else {
                 logger.debug("the sendQueue for " + topic + " " + keyinterval + " " + node.getName() + " is empty");
                 if (rule.getType() == 4) {
                     timenum++;
-                    if (timenum >= datasenderLimitTime/2) {
+                    if (timenum >= datasenderLimitTime / 2) {
                         Map<RNode, Object> messageTransferStation = MessageTransferStation.getMessageTransferStation();
                         ConcurrentHashMap<String, ConcurrentLinkedQueue> chm = (ConcurrentHashMap<String, ConcurrentLinkedQueue>) messageTransferStation.get(node);
-                        if(chm == null){
+                        if (chm == null) {
                             break;
                         }
-                            
+
                         String is = keyinterval;
                         synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
                             chm.remove(is);
-                        } 
+                        }
                         break;
                     }
                 }
@@ -183,7 +188,7 @@ public class DataSenderThread implements Runnable {
                 count++;
             } else {
                 try {
-                    Thread.sleep(2);
+                    Thread.sleep(1);
                 } catch (InterruptedException ex) {
                     //do nothing
                 }

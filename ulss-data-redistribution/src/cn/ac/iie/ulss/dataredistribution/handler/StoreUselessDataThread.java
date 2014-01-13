@@ -78,7 +78,9 @@ public class StoreUselessDataThread implements Runnable {
                         try {
                             bos.write(b);
                             bos.write('\n');
+                            logger.info("write useless data to the file" + f.getName());
                         } catch (IOException ex) {
+                            logger.info("write useless data to the file" + f.getName() + " error");
                             logger.error(b.toString() + ex, ex);
                             continue;
                         }

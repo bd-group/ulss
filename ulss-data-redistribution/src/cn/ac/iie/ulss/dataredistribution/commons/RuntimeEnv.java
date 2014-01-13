@@ -23,7 +23,7 @@ public class RuntimeEnv {
     public static final String DATASENDER_THREAD = "datasenderThread";
     public static final String DATASENDER_LIMITTIME = "datasenderLimitTime";
     public static final String SEND_THREAD_POOL_SIZE = "sendThreadPoolSize";
-    public static final String ACTIVE_THREAD_COUNT = "activeThreadCount";
+//    public static final String ACTIVE_THREAD_COUNT = "activeThreadCount";
     public static final String METASTORE_CLIENT = "metaStoreClient";
     public static final String DATA_DIR = "dataDir";
     public static final String METASTORE_CLIENT_POOL_SIZE = "metaStoreClientPoolSize";
@@ -131,13 +131,13 @@ public class RuntimeEnv {
         logger.info("get sendThreadPoolSize " + sendThreadPoolSize);
         dynamicParams.put(SEND_THREAD_POOL_SIZE, sendThreadPoolSize);
 
-        int activeThreadCount = conf.getInt(ACTIVE_THREAD_COUNT, 0);
-        if (activeThreadCount < 0) {
-            logger.error("parameter activeThreadCount is a wrong number");
-            return false;
-        }
-        logger.info("get activeThreadCount " + activeThreadCount);
-        dynamicParams.put(ACTIVE_THREAD_COUNT, activeThreadCount);
+//        int activeThreadCount = conf.getInt(ACTIVE_THREAD_COUNT, 0);
+//        if (activeThreadCount < 0) {
+//            logger.error("parameter activeThreadCount is a wrong number");
+//            return false;
+//        }
+//        logger.info("get activeThreadCount " + activeThreadCount);
+//        dynamicParams.put(ACTIVE_THREAD_COUNT, activeThreadCount);
 
         String metaStoreClient = conf.getString(METASTORE_CLIENT, "");
         if (metaStoreClient.isEmpty()) {

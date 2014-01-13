@@ -75,21 +75,19 @@ public class TransmitThread implements Runnable {
     @Override
     public void run() {
         init();
-
+        logger.info("begining the dataSplit and send the message from " + topic + " to the transfer station ");
         while (true) {
             if (!dataPool.isEmpty()) {
                 try {
-                    logger.info("begining the dataSplit and send the message from " + topic + " to the transfer station ");
                     dataSplitAndSend();
                 } catch (Exception ex) {
-                    logger.error(ex, ex);
-                    logger.error("a transmit thread for " + topic + " is dead ");
+                    logger.error("a transmit thread for " + topic + " is dead " + ex, ex);
                     return;
                 }
             } else {
-                logger.info("dataPool for the topic " + topic + " is empty !");
+                logger.debug("dataPool for the topic " + topic + " is empty !");
                 try {
-                    Thread.sleep(2000);
+                    Thread.sleep(500);
                 } catch (InterruptedException ex) {
                     logger.info(ex, ex);
                 }
@@ -130,7 +128,7 @@ public class TransmitThread implements Runnable {
             try {
                 msgRecord = msgreader.read(null, msgbd);
             } catch (IOException ex) {
-                logger.info(" split the one data from the topic " + topic + " in the dataPool wrong " + ex, ex);
+                logger.info("split the one data from the topic " + topic + " in the dataPool wrong " + ex, ex);
                 storeUselessData(topic, data);
                 continue;
             }
@@ -169,7 +167,7 @@ public class TransmitThread implements Runnable {
 //            storeStrandedData(rule, data);
                 logger.error("There is no node for the " + topic + " " + rule.getServiceName());
                 try {
-                    Thread.sleep(5000);
+                    Thread.sleep(2000);
                 } catch (InterruptedException ex) {
                     //do nothing
                 }
@@ -203,7 +201,7 @@ public class TransmitThread implements Runnable {
 //                storeStrandedData(rule, data);
                 logger.error("There is no node for the " + topic + " " + rule.getServiceName());
                 try {
-                    Thread.sleep(5000);
+                    Thread.sleep(2000);
                 } catch (InterruptedException ex) {
                     //do nothing
                 }
@@ -230,7 +228,7 @@ public class TransmitThread implements Runnable {
 //                    storeStrandedData(rule, data);
                     logger.error("There is no node for the " + topic + " " + rule.getServiceName());
                     try {
-                        Thread.sleep(5000);
+                        Thread.sleep(2000);
                     } catch (InterruptedException ex) {
                         //do nothing
                     }
@@ -266,7 +264,7 @@ public class TransmitThread implements Runnable {
 //                    storeStrandedData(rule, data
                     logger.error("There is no node for the " + topic + " " + rule.getServiceName());
                     try {
-                        Thread.sleep(5000);
+                        Thread.sleep(2000);
                     } catch (InterruptedException ex) {
                         //do nothing
                     }
@@ -362,7 +360,6 @@ public class TransmitThread implements Runnable {
      * return false
      */
     private boolean isTrue(String s, GenericRecord dxxRecord) {
-
         if ((!s.contains("|")) && (!s.contains("&"))) {
             if (!s.contains("=")) {
                 logger.error("the rule's fileter is wrong");
@@ -396,28 +393,28 @@ public class TransmitThread implements Runnable {
         return false;
     }
 
-    /**
-     *
-     * place the startded data to the strandedDataStore
-     */
-    private void storeStrandedData(Rule rule, byte[] data) {
-        ConcurrentHashMap<Rule, ConcurrentLinkedQueue> strandedDataStore = (ConcurrentHashMap<Rule, ConcurrentLinkedQueue>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_STORE);
-        synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_STRANDEDDATA)) {
-            if (strandedDataStore.containsKey(rule)) {
-                ConcurrentLinkedQueue clq = strandedDataStore.get(rule);
-                clq.offer(data);
-            } else {
-                ConcurrentLinkedQueue sdQueue = new ConcurrentLinkedQueue();
-                sdQueue.offer(data);
-                strandedDataStore.put(rule, sdQueue);
-                StoreStrandedDataThread sdt = new StoreStrandedDataThread(sdQueue, rule);
-                Thread tsdt = new Thread(sdt);
-                tsdt.setName("StoreStrandedDataThread-" + rule.getTopic() + "-" + rule.getServiceName());
-                tsdt.start();
-                logger.info("start a StoreStrandedDataThread for " + topic);
-            }
-        }
-    }
+//    /**
+//     *
+//     * place the startded data to the strandedDataStore
+//     */
+//    private void storeStrandedData(Rule rule, byte[] data) {
+//        ConcurrentHashMap<Rule, ConcurrentLinkedQueue> strandedDataStore = (ConcurrentHashMap<Rule, ConcurrentLinkedQueue>) RuntimeEnv.getParam(GlobalVariables.STRANDED_DATA_STORE);
+//        synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_STRANDEDDATA)) {
+//            if (strandedDataStore.containsKey(rule)) {
+//                ConcurrentLinkedQueue clq = strandedDataStore.get(rule);
+//                clq.offer(data);
+//            } else {
+//                ConcurrentLinkedQueue sdQueue = new ConcurrentLinkedQueue();
+//                sdQueue.offer(data);
+//                strandedDataStore.put(rule, sdQueue);
+//                StoreStrandedDataThread sdt = new StoreStrandedDataThread(sdQueue, rule);
+//                Thread tsdt = new Thread(sdt);
+//                tsdt.setName("StoreStrandedDataThread-" + rule.getTopic() + "-" + rule.getServiceName());
+//                tsdt.start();
+//                logger.info("start a StoreStrandedDataThread for " + topic);
+//            }
+//        }
+//    }
 
     /**
      *

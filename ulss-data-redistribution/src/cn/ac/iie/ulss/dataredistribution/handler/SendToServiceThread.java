@@ -17,7 +17,6 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -56,7 +55,6 @@ public class SendToServiceThread implements Runnable {
     String serviceName = null;
     byte[] sendData = null;
     Map<RNode, Object> sendRows = null;
-    static org.apache.log4j.Logger logger = null;
     Rule rule = null;
     String keyinterval = null;
     Long f_id = 0L;
@@ -70,7 +68,8 @@ public class SendToServiceThread implements Runnable {
     ConcurrentHashMap<String, AtomicLong> ruleToCount = null;
     MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
     int count = 0;
-    static byte[] li = new byte[0];
+//    static byte[] li = new byte[0];
+    static org.apache.log4j.Logger logger = null;
 
     static {
         PropertyConfigurator.configure("log4j.properties");
@@ -131,7 +130,7 @@ public class SendToServiceThread implements Runnable {
                     } catch (InterruptedException ex1) {
                     }
                 } catch (Exception ex) {
-                    logger.info("send " + count + " message for " + topic + " " + serviceName + " to the " + url + "failed + timeout" + ex, ex);
+                    logger.info("send " + count + " messages for " + topic + " " + serviceName + " to the " + url + "failed or timeout" + ex, ex);
                     flag = -1;
                     break;
                 }
@@ -149,13 +148,13 @@ public class SendToServiceThread implements Runnable {
                             continue;
                         } else {
                             AtomicLong al = ruleToCount.get(topic + serviceName);
-                            Long l = al.addAndGet(count);
-                            logger.info("send " + count + " messages for " + topic + " " + serviceName + " to the " + url + " successfully and the total number is " + l);
+                            al.addAndGet(count);
+                            logger.info("send " + count + " messages for " + topic + " " + serviceName + " to the " + url + " successfully ");
                             EntityUtils.consume(response.getEntity());
                             break;
                         }
                     } else {
-                        logger.info(response.getStatusLine());
+                        logger.info("send " + count + " messages for " + topic + " " + serviceName + " to the " + url + " failed because " + response.getStatusLine());
                         EntityUtils.consume(response.getEntity());
                     }
                 } catch (IOException ex) {
@@ -213,7 +212,7 @@ public class SendToServiceThread implements Runnable {
                     } catch (InterruptedException ex1) {
                     }
                 } catch (Exception ex) {
-                    logger.info("send " + count + " messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + "timeout" + ex, ex);
+                    logger.info("send " + count + " messages for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + "failed or timeout" + ex, ex);
                     flag2 = -1;
                     break;
                 }
@@ -237,8 +236,8 @@ public class SendToServiceThread implements Runnable {
                             continue;
                         } else {
                             AtomicLong al = ruleToCount.get(topic + serviceName);
-                            Long l = al.addAndGet(count);
-                            logger.info("send " + count + " messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + " successfully and the total number is " + l);
+                            al.addAndGet(count);
+                            logger.info("send " + count + " messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + " successfully ");
                             EntityUtils.consume(response.getEntity());
                             break;
                         }
@@ -356,7 +355,7 @@ public class SendToServiceThread implements Runnable {
                     ob[0] = "";
                     ob[1] = 0L;
                     ob[2] = "";
-                    logger.info("need to get zk for " + topic + " " + keyinterval + " " + node.getName());
+                    logger.info("can't get aomlsf , need to get zk for " + topic + " " + keyinterval + " " + node.getName());
                     String zkCluster = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
 
                     int zkSessionTimeout = 30000;
@@ -366,32 +365,28 @@ public class SendToServiceThread implements Runnable {
 
                     while (true) {
                         if (!zk.exists("/ulss")) {
-                            logger.debug("existsss " + zk.exists("/ulss"));
                             try {
                                 zk.createPersistent("/ulss");
-                                logger.debug("/ulss created");
+                                logger.info("/ulss created");
                             } catch (Exception e) {
-                                logger.debug("root exists : other master has created the /ulss");
+                                logger.info("root exists : other master has created the /ulss" + e, e);
                             }
                         }
 
                         if (!zk.exists("/ulss/redistribution")) {
-                            logger.debug("existsss " + zk.exists("/ulss/redistribution"));
                             try {
                                 zk.createPersistent("/ulss/redistribution");
-                                logger.debug("/ulss/redistribution created");
+                                logger.info("/ulss/redistribution created");
                             } catch (Exception e) {
-                                logger.debug("root exists : other master has created the /ulss/redistribution");
+                                logger.info("root exists : other master has created the /ulss/redistribution" + e, e);
                             }
                         }
 
                         if (!zk.exists("/ulss/redistribution/" + topic + keyinterval + "lock")) {
-
                             try {
-                                zk.createEphemeral("/ulss/redistribution/" + topic + keyinterval + "lock", keyinterval);
-                                logger.debug("new lock " + keyinterval + " created");
+                                zk.createEphemeral("/ulss/redistribution/" + topic + keyinterval + "lock", topic + keyinterval + node.getName());
+                                logger.info("new lock " + topic + keyinterval + "lock" + " is created");
                             } catch (Exception e) {
-                                logger.debug("the lock has been created");
                                 try {
                                     Thread.sleep(2000);
                                 } catch (Exception ex) {
@@ -406,7 +401,6 @@ public class SendToServiceThread implements Runnable {
                             road = (String) ob[2];
 
                             if (sendIP == null || f_id == 0L || road == null || sendIP.equals("") || road.equals("") || sendIP == "" || road == "") {
-//                                   sf2 = icli.create_file("NODE33", 2, m[2], map.get(topic), list);
                                 sendIP = "";
                                 f_id = 0L;
                                 road = "";
@@ -514,13 +508,13 @@ public class SendToServiceThread implements Runnable {
      * get file from the metastore before get the zk lock
      */
     private Object[] getUsefulFileFromMetaDB(List<SplitValue> list) {
-        logger.info("get the splitvalue list and start get the file from metadb");
+        logger.info("start get a useful file from metadb");
         Object[] ob = new Object[3];
         String getsendIP = "";
         Long getf_id = 0L;
         String getroad = "";
 
-        MetaStoreClient cli = mscp.getClient();
+        MetaStoreClientPool.MetaStoreClient cli = mscp.getClient();
         try {
             IMetaStoreClient icli = cli.getHiveClient();
             List<SFile> lsf = null;
@@ -529,16 +523,16 @@ public class SendToServiceThread implements Runnable {
             while (attemp <= attempSize) {
                 try {
                     lsf = icli.filterTableFiles(partT.split("\\|")[0], partT.split("\\|")[1], list);
-                    logger.info("get the filelist for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + list + " " + lsf);
+                    logger.info("get the filelist for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + keyinterval + " " + lsf);
                     break;
                 } catch (Exception ex) {
-                    logger.error("can not get the SFileList " + ex, ex);
+                    logger.error("can not get the SFileList for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + keyinterval + ex, ex);
                     rcmetastore(icli);
                     attemp++;
-                }
-                try {
-                    Thread.sleep(1000);
-                } catch (Exception e) {
+                    try {
+                        Thread.sleep(2000);
+                    } catch (Exception e) {
+                    }
                 }
             }
 
@@ -552,7 +546,7 @@ public class SendToServiceThread implements Runnable {
 
                 List<SFile> aolsf = new ArrayList<SFile>();
                 if (!alsf.isEmpty()) {
-                    logger.info(" the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " has " + alsf.size() + " available file");
+                    logger.info("the alsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + alsf.size() + " available file");
                     for (SFile s : alsf) {
                         if (s.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
                             aolsf.add(s);
@@ -564,19 +558,19 @@ public class SendToServiceThread implements Runnable {
                     if (!aolsf.isEmpty()) {
                         aomlsf = new SFile();
                         aomlsf.setLength(Long.MAX_VALUE);
-                        logger.info(" the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " has " + aolsf.size() + " available and open file");
+                        logger.info("the aolsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + aolsf.size() + " available and open file");
                         for (SFile s : aolsf) {
                             if (s.getLength() <= aomlsf.getLength()) {
                                 aomlsf = s;
                             }
                         }
 
+                        logger.info("the aomlsf for " + topic + " " + keyinterval + " " + node.getName() + " is " + aomlsf);
+
                         if (aomlsf.getLocations() == null) {
                             logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has no locations");
                         } else {
-
                             int visit = -1;
-
                             for (int i = 0; i < aomlsf.getLocations().size(); i++) {
                                 logger.debug(aomlsf.getLocations().get(i).getVisit_status());
                                 if (aomlsf.getLocations().get(i).getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
@@ -585,7 +579,7 @@ public class SendToServiceThread implements Runnable {
                             }
 
                             if (visit == -1) {
-                                logger.info("there is no location is online in the file " + aomlsf);
+                                logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has no location is online");
                             } else {
                                 try {
                                     getsendIP = aomlsf.getLocations().get(visit).getNode_name() + rule.getIPList()[0];
@@ -593,16 +587,15 @@ public class SendToServiceThread implements Runnable {
                                     getf_id = aomlsf.getFid();
                                     getroad = aomlsf.getLocations().get(visit).getLocation() + "|" + aomlsf.getLocations().get(visit).getDevid();
                                     if (getsendIP == null || getf_id == 0L || getroad == null || getsendIP.equals("") || getroad.equals("") || getsendIP == "" || getroad == "") {
-                                        logger.info("there is unvaid information in the file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP);
+                                        logger.info("there is unvaid information in the file " + aomlsf + " for the topic " + topic + " " + keyinterval + " " + node.getName() + " to the road " + getroad + " to the IP " + getsendIP);
                                         setBad(icli, aomlsf);
                                         aolsf.remove(aomlsf);
                                         alsf.remove(aomlsf);
                                     } else {
-                                        logger.debug("this file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP + " has online location");
-                                        logger.info("choose the file " + aomlsf + " to the road " + getroad + " to the sendIP " + getsendIP);
+                                        logger.info("choose the file " + aomlsf + " for the topic " + topic + " " + keyinterval + " " + node.getName() + " to the road " + getroad + " to the sendIP " + getsendIP);
                                     }
                                 } catch (Exception e) {
-                                    logger.info("there is unvaid information in the file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP);
+                                    logger.info("there is unvaid information in the file " + aomlsf + " for the topic " + topic + " " + keyinterval + " " + node.getName() + " to the road " + getroad + " to the IP " + getsendIP);
                                 }
                             }
                         }
@@ -630,26 +623,24 @@ public class SendToServiceThread implements Runnable {
      * get file from the metadb after get the zk lock
      */
     private Object[] getFileFromMetaDB(List<SplitValue> list) {
-        logger.info("after get zk , get or reopen a file from the metadb!");
+        logger.info("after get zk , get or reopen a file for " + topic + " " + keyinterval + " " + node.getName() + " from the metadb!");
         Object[] ob = new Object[3];
         String getsendIP = "";
         Long getf_id = 0L;
         String getroad = "";
 
-        MetaStoreClient cli = mscp.getClient();
+        MetaStoreClientPool.MetaStoreClient cli = mscp.getClient();
         try {
             IMetaStoreClient icli = cli.getHiveClient();
-
             List<SFile> lsf = null;
-
             int attemp = 0;
             while (attemp <= attempSize) {
                 try {
                     lsf = icli.filterTableFiles(partT.split("\\|")[0], partT.split("\\|")[1], list);
-                    logger.info("get the filelist for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + list + " " + lsf);
+                    logger.info("get the filelist for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + keyinterval + " " + lsf);
                     break;
                 } catch (Exception ex) {
-                    logger.error("can not get the SFileList " + ex, ex);
+                    logger.error("can not get the SFileList for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + keyinterval + ex, ex);
                     rcmetastore(icli);
                     attemp++;
                 }
@@ -669,7 +660,7 @@ public class SendToServiceThread implements Runnable {
 
                 List<SFile> aolsf = new ArrayList<SFile>();
                 if (!alsf.isEmpty()) {
-                    logger.info(" the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " has " + alsf.size() + " available file");
+                    logger.info("the alsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + alsf.size() + " available file");
                     for (SFile s : alsf) {
                         if (s.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
                             aolsf.add(s);
@@ -681,7 +672,7 @@ public class SendToServiceThread implements Runnable {
                     while (!aolsf.isEmpty()) {
                         aomlsf = new SFile();
                         aomlsf.setLength(Long.MAX_VALUE);
-                        logger.info(" the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " has " + aolsf.size() + " available and open file");
+                        logger.info("the aolsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + aolsf.size() + " available and open file");
                         for (SFile s : aolsf) {
                             if (s.getLength() <= aomlsf.getLength()) {
                                 aomlsf = s;
@@ -699,14 +690,13 @@ public class SendToServiceThread implements Runnable {
                         int visit = -1;
 
                         for (int i = 0; i < aomlsf.getLocations().size(); i++) {
-                            logger.debug(aomlsf.getLocations().get(i).getVisit_status());
                             if (aomlsf.getLocations().get(i).getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
                                 visit = i;
                             }
                         }
 
                         if (visit == -1) {
-                            logger.info("there is no location is online in the file " + aomlsf);
+                            logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has no locations");
                             setBad(icli, aomlsf);
                             aolsf.remove(aomlsf);
                             alsf.remove(aomlsf);
@@ -722,7 +712,7 @@ public class SendToServiceThread implements Runnable {
                                     aolsf.remove(aomlsf);
                                     alsf.remove(aomlsf);
                                 } else {
-                                    logger.info("choose the file " + aomlsf + " to the road " + getroad + " to the sendIP " + getsendIP);
+                                    logger.info("choose the file " + aomlsf + " for the topic " + topic + " " + keyinterval + " " + node.getName() + " to the road " + getroad + " to the sendIP " + getsendIP);
                                     break;
                                 }
                             } catch (Exception e) {
@@ -735,7 +725,7 @@ public class SendToServiceThread implements Runnable {
                     }
 
                     if (getsendIP == null || getf_id == 0L || getroad == null || getsendIP.equals("") || getroad.equals("") || getsendIP == "" || getroad == "") {
-                        logger.info("the SFileList for " + topic + " " + keyinterval + " " + node.getName() + "has no open file or the open file has no useful location");
+                        logger.info("the SFileList for " + topic + " " + keyinterval + " " + node.getName() + "has no available and open and useful file");
                         getsendIP = "";
                         getf_id = 0L;
                         getroad = "";
@@ -747,7 +737,7 @@ public class SendToServiceThread implements Runnable {
                         }
 
                         while (alsf.size() > 1) {
-                            logger.info(" for " + topic + " " + keyinterval + " " + node.getName() + "alsf size is " + alsf.size());
+                            logger.info("the alsf for " + topic + " " + keyinterval + " " + node.getName() + "has " + alsf.size() + " available and not open file");
                             aomlsf = new SFile();
                             aomlsf.setLength(Long.MAX_VALUE);
 
@@ -789,7 +779,7 @@ public class SendToServiceThread implements Runnable {
                                     attemp++;
                                 }
                                 try {
-                                    Thread.sleep(1000);
+                                    Thread.sleep(2000);
                                 } catch (Exception e) {
                                 }
                             }
@@ -811,7 +801,7 @@ public class SendToServiceThread implements Runnable {
                                     }
 
                                     if (visit == -1) {
-                                        logger.info("there is no location is online in the file " + aomlsf);
+                                        logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has no location is online");
                                         setBad(icli, aomlsf);
                                         alsf.remove(aomlsf);
                                     } else {
@@ -824,19 +814,18 @@ public class SendToServiceThread implements Runnable {
                                                 getsendIP = "";
                                                 getf_id = 0L;
                                                 getroad = "";
-                                                logger.info("there is unvalid information in the file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP);
+                                                logger.info("there is unvaid information in the file " + aomlsf + " for the topic " + topic + " " + keyinterval + " " + node.getName() + " to the road " + getroad + " to the IP " + getsendIP);
                                                 setBad(icli, aomlsf);
                                                 alsf.remove(aomlsf);
                                             } else {
-                                                logger.debug("this file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP + " has online location");
-                                                logger.info("choose the file " + aomlsf + " to the road " + getroad + " to the sendIP " + getsendIP);
+                                                logger.info("choose the file " + aomlsf + " for the topic " + topic + " " + keyinterval + " " + node.getName() + " to the road " + getroad + " to the sendIP " + getsendIP);
                                                 break;
                                             }
                                         } catch (Exception e) {
                                             getsendIP = "";
                                             getf_id = 0L;
                                             getroad = "";
-                                            logger.info("there is no online location in the file " + aomlsf + " for the topic " + topic + " to the road " + getroad + " to the IP " + getsendIP);
+                                            logger.info("there is unvaid information in the file " + aomlsf + " for the topic " + topic + " " + keyinterval + " " + node.getName() + " to the road " + getroad + " to the IP " + getsendIP);
                                             setBad(icli, aomlsf);
                                             alsf.remove(aomlsf);
                                         }
@@ -883,8 +872,8 @@ public class SendToServiceThread implements Runnable {
         CreatePolicy cp = new CreatePolicy();
         //cp.setOperation(CreateOperation.CREATE_NEW);
         cp.setOperation(CreateOperation.CREATE_NEW_RANDOM);
-        
-        MetaStoreClient cli = mscp.getClient();
+
+        MetaStoreClientPool.MetaStoreClient cli = mscp.getClient();
         SFile sf2 = null;
         int attemp = 0;
         try {
@@ -921,16 +910,15 @@ public class SendToServiceThread implements Runnable {
 
             while (true) {
                 try {
-                    logger.info("begin to create file " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + list);
+                    logger.info("begin to create file for " + topic + " " + keyinterval + " " + node.getName() + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1]);
                     sf2 = icli.create_file_by_policy(cp, 2, partT.split("\\|")[0], partT.split("\\|")[1], list);
                     if (sf2 == null) {
-                        logger.debug("can not create file for the topic " + topic + " " + keyinterval + " " + node.getName() + " from metastore ");
                         if (CFretryInterval < 30000) {
                             CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
                         } else {
                             CFretryInterval = 30000;
                         }
-                        logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+                        logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
                         try {
                             Thread.sleep(CFretryInterval);
                         } catch (Exception ex) {
@@ -938,11 +926,11 @@ public class SendToServiceThread implements Runnable {
                         }
                         continue;
                     }
-                    logger.info("create file for the topic " + topic + " " + keyinterval + " " + node.getName() + " from metastore ");
+                    logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + " from metastore successfully");
                     String nodeN = sf2.getLocations().get(0).getNode_name();
                     if (nodeN == null) {
                         if (nodeNames.isEmpty()) {
-                            logger.debug("thres is no node in the nodeGroups for " + partT.split("\\|")[0] + partT.split("\\|")[1]);
+                            logger.info("thres is no node in the nodeGroups for " + partT.split("\\|")[0] + partT.split("\\|")[1]);
                             try {
                                 Thread.sleep(2000);
                             } catch (Exception ex) {
@@ -953,7 +941,7 @@ public class SendToServiceThread implements Runnable {
                             Random r = new Random();
                             int ran = r.nextInt(nodeNames.size());
                             if (nodeNames.get(ran) == null || nodeNames.get(ran).isEmpty()) {
-                                logger.debug("thres is null node in the nodeGroups for " + partT.split("\\|")[0] + partT.split("\\|")[1]);
+                                logger.info("thres is null node in the nodeGroups for " + partT.split("\\|")[0] + partT.split("\\|")[1]);
                                 try {
                                     Thread.sleep(2000);
                                 } catch (Exception ex) {
@@ -962,11 +950,9 @@ public class SendToServiceThread implements Runnable {
                                 continue;
                             }
                             sendIP = nodeNames.get(ran) + rule.getIPList()[0];
-                            //sendIP = "192.168.1." + nodeNames.get(ran).substring(4) + rule.getIPList()[0];
                         }
                     } else {
                         sendIP = nodeN + rule.getIPList()[0];
-                        //sendIP = "192.168.1." + nodeN.substring(4) + rule.getIPList()[0];
                     }
                     f_id = sf2.getFid();
                     road = sf2.getLocations().get(0).getLocation() + "|" + sf2.getLocations().get(0).getDevid();
@@ -975,7 +961,7 @@ public class SendToServiceThread implements Runnable {
                         sendIP = "";
                         f_id = 0L;
                         road = "";
-                        logger.debug("road is null" + " for " + sf2 + topic + " " + keyinterval + " " + node.getName());
+                        logger.info("road is null for " + sf2 + topic + " " + keyinterval + " " + node.getName());
                         try {
                             Thread.sleep(2000);
                         } catch (Exception ex) {
@@ -987,7 +973,7 @@ public class SendToServiceThread implements Runnable {
                     SendCreateFileCMD scfc = new SendCreateFileCMD(sendIP, f_id, road);
                     HttpResponse hp = scfc.send();
                     if (hp == null) {
-                        logger.error("the file  for " + sf2 + topic + " " + keyinterval + " " + node.getName() + " can not be set online");
+                        logger.error("the file  for " + topic + " " + keyinterval + " " + node.getName() + " " + sf2 + " can not be set online");
                         sendIP = "";
                         f_id = 0L;
                         road = "";
@@ -998,7 +984,7 @@ public class SendToServiceThread implements Runnable {
                         } else {
                             CFretryInterval = 30000;
                         }
-                        logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+                        logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
                         try {
                             Thread.sleep(CFretryInterval);
                         } catch (Exception ex) {
@@ -1009,7 +995,7 @@ public class SendToServiceThread implements Runnable {
                     } else {
                         logger.debug("sendCreateFileCMD : " + hp.getStatusLine());
                         if (hp.getStatusLine().getStatusCode() != 200) {
-                            logger.error("the file  for " + sf2 + topic + " " + keyinterval + " " + node.getName() + " can not be set online");
+                            logger.error("the file  for " + topic + " " + keyinterval + " " + node.getName() + " " + sf2 + " can not be set online");
                             sendIP = "";
                             f_id = 0L;
                             road = "";
@@ -1020,7 +1006,7 @@ public class SendToServiceThread implements Runnable {
                             } else {
                                 CFretryInterval = 30000;
                             }
-                            logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+                            logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
                             try {
                                 Thread.sleep(CFretryInterval);
                             } catch (Exception ex) {
@@ -1033,8 +1019,7 @@ public class SendToServiceThread implements Runnable {
                             try {
                                 hp.getEntity().writeTo(out);
                             } catch (Exception ex) {
-                                logger.error(ex, ex);
-                                logger.error("the file  for " + sf2 + topic + " " + keyinterval + " " + node.getName() + " can not be set online " + hp.getStatusLine());
+                                logger.error("the file  for " + topic + " " + keyinterval + " " + node.getName() + " " + sf2 + " can not be set online" + hp.getStatusLine() + ex, ex);
                                 sendIP = "";
                                 f_id = 0L;
                                 road = "";
@@ -1044,7 +1029,7 @@ public class SendToServiceThread implements Runnable {
                                 } else {
                                     CFretryInterval = 30000;
                                 }
-                                logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+                                logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
 
                                 try {
                                     Thread.sleep(CFretryInterval);
@@ -1057,7 +1042,7 @@ public class SendToServiceThread implements Runnable {
                             String resonseEn = new String(out.toByteArray());
                             if ("-1".equals(resonseEn.split("[\n]")[0])) {
                                 logger.info(resonseEn.split("[\n]")[1]);
-                                logger.error("the file  for " + f_id + topic + " " + keyinterval + " " + node.getName() + " can not be set online " + hp.getStatusLine());
+                                logger.error("the file  for " + topic + " " + keyinterval + " " + node.getName() + " " + sf2 + " can not be set online" + hp.getStatusLine());
                                 sendIP = "";
                                 f_id = 0L;
                                 road = "";
@@ -1069,7 +1054,7 @@ public class SendToServiceThread implements Runnable {
                                 } else {
                                     CFretryInterval = 30000;
                                 }
-                                logger.info("CREATE FILE for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+                                logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
                                 try {
                                     Thread.sleep(CFretryInterval);
                                 } catch (Exception ex) {
@@ -1078,7 +1063,7 @@ public class SendToServiceThread implements Runnable {
 
                                 continue;
                             } else {
-                                logger.info("this file " + f_id + " for the topic " + topic + " to the road " + road + " to the IP " + sendIP + " has been set online");
+                                logger.info("this file " + f_id + " for " + topic + " " + keyinterval + " " + node.getName() + " to the road " + road + " to the IP " + sendIP + " has been set online");
                                 ob[0] = sendIP;
                                 ob[1] = f_id;
                                 ob[2] = road;
@@ -1103,7 +1088,7 @@ public class SendToServiceThread implements Runnable {
                     continue;
                 }
             }
-            logger.info("new File for " + topic + " " + keyinterval + " " + node.getName() + " has be created");
+            logger.info("new useful file for " + topic + " " + keyinterval + " " + node.getName() + " has be created");
         } finally {
             cli.release();
         }
@@ -1148,7 +1133,7 @@ public class SendToServiceThread implements Runnable {
                     MSretryInterval = 30000;
                 }
 
-                logger.info("metastore " + String.format("On retry attempt %d . Sleeping %d seconds.", ++MSretryAttempt, MSretryInterval / 1000));
+                logger.info("reconnect to the metastore " + String.format("On retry attempt %d . Sleeping %d seconds.", ++MSretryAttempt, MSretryInterval / 1000));
                 try {
                     Thread.sleep(MSretryInterval);
                 } catch (InterruptedException ie) {

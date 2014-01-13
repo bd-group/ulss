@@ -10,6 +10,7 @@ import cn.ac.iie.ulss.dataredistribution.handler.SendStrandedDataThread;
 import cn.ac.iie.ulss.dataredistribution.handler.TransmitStrandedDataThread;
 import cn.ac.iie.ulss.dataredistribution.tools.MetaStoreClientPool;
 import cn.ac.iie.ulss.dataredistribution.tools.Rule;
+import com.taobao.metamorphosis.client.consumer.MessageConsumer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -61,6 +62,8 @@ public class GlobalVariables {
     public static final String TOPIC_TO_SYN_COUNT = "TopicToSynCount";
     public static final String TOPIC_TO_HTTPCLIENT = "TopicToHttpclient";
     public static final String TOPIC_TO_NODES = "topicToNodes";
+    public static final String TOPIC_TO_CONSUMER = "topicToConsumer";
+    public static final String TOPIC_TO_PACKAGE = "topicToPackage";
     static Logger logger = null;
 
     static {
@@ -169,6 +172,14 @@ public class GlobalVariables {
         logger.info("setting the topicToNodes to the Global Variables");
         Map<String, ArrayList<RNode>> topicToNodes = new HashMap<String, ArrayList<RNode>>();
         RuntimeEnv.addParam(TOPIC_TO_NODES, topicToNodes);
+
+        logger.info("setting the topicToConsumer to the Global Variables");
+        Map<String, MessageConsumer> topicToConsumer = new HashMap<String, MessageConsumer>();
+        RuntimeEnv.addParam(TOPIC_TO_CONSUMER, topicToConsumer);
+
+        logger.info("setting the topicToPackage to the Global Variables");
+        Map<String, AtomicLong> topicToPackage = new HashMap<String, AtomicLong>();
+        RuntimeEnv.addParam(TOPIC_TO_PACKAGE, topicToPackage);
 
         logger.info("setting the detectNodeList and detectNode to the Global Variables");
         ConcurrentLinkedQueue<Object[]> detectNodeList = new ConcurrentLinkedQueue<Object[]>();
