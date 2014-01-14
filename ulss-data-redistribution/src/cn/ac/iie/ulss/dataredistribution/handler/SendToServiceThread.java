@@ -60,6 +60,7 @@ public class SendToServiceThread implements Runnable {
     Long f_id = 0L;
     String road = null;
     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    SimpleDateFormat dateFormat2 = new SimpleDateFormat("yyyy-MM-dd:HH");
     int attempSize = 2;
     private static final int METASTORE_RETRY_INIT = 2000;
     private static final int CREATEFILE_RETRY_INIT = 2000;
@@ -130,7 +131,9 @@ public class SendToServiceThread implements Runnable {
                     } catch (InterruptedException ex1) {
                     }
                 } catch (Exception ex) {
-                    logger.info("send " + count + " messages for " + topic + " " + serviceName + " to the " + url + "failed or timeout" + ex, ex);
+                    Date date = new Date();
+                    String time = dateFormat2.format(date);
+                    logger.info(time + " send " + count + " messages for " + topic + " " + serviceName + " " + node.getName() + " to the " + url + " failed or timeout " + ex, ex);
                     flag = -1;
                     break;
                 }
@@ -149,7 +152,9 @@ public class SendToServiceThread implements Runnable {
                         } else {
                             AtomicLong al = ruleToCount.get(topic + serviceName);
                             al.addAndGet(count);
-                            logger.info("send " + count + " messages for " + topic + " " + serviceName + " to the " + url + " successfully ");
+                            Date date = new Date();
+                            String time = dateFormat2.format(date);
+                            logger.info(time + " just send " + count + " messages for " + topic + " " + serviceName + " " + node.getName() + " to the " + url + " successfully ");
                             EntityUtils.consume(response.getEntity());
                             break;
                         }
@@ -212,7 +217,9 @@ public class SendToServiceThread implements Runnable {
                     } catch (InterruptedException ex1) {
                     }
                 } catch (Exception ex) {
-                    logger.info("send " + count + " messages for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + "failed or timeout" + ex, ex);
+                    Date date = new Date();
+                    String time = dateFormat2.format(date);
+                    logger.info(time + " send " + count + " messages for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + "failed or timeout" + ex, ex);
                     flag2 = -1;
                     break;
                 }
@@ -237,7 +244,9 @@ public class SendToServiceThread implements Runnable {
                         } else {
                             AtomicLong al = ruleToCount.get(topic + serviceName);
                             al.addAndGet(count);
-                            logger.info("send " + count + " messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + " successfully ");
+                            Date date = new Date();
+                            String time = dateFormat2.format(date);
+                            logger.info( time + " just send " + count + " messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + " successfully ");
                             EntityUtils.consume(response.getEntity());
                             break;
                         }
@@ -486,17 +495,19 @@ public class SendToServiceThread implements Runnable {
             while (attemp <= attempSize) {
                 try {
                     icli.set_loadstatus_bad(oldf_id);
-                    logger.info("has set bad the file " + oldf_id + " successfully!");
+                    Date date = new Date();
+                    String time = dateFormat2.format(date);
+                    logger.info(time + " has set bad the file " + oldf_id);
                     break;
                 } catch (Exception ex) {
                     logger.error("can not set bad the file " + oldf_id + " " + ex, ex);
                     rcmetastore(icli);
                     attemp++;
                 }
-                try {
-                    Thread.sleep(2000);
-                } catch (Exception e1) {
-                }
+//                try {
+//                    Thread.sleep(2000);
+//                } catch (Exception e1) {
+//                }
             }
         } finally {
             cli.release();
@@ -508,7 +519,9 @@ public class SendToServiceThread implements Runnable {
      * get file from the metastore before get the zk lock
      */
     private Object[] getUsefulFileFromMetaDB(List<SplitValue> list) {
-        logger.info("start get a useful file from metadb");
+        Date date = new Date();
+        String time = dateFormat2.format(date);
+        logger.info(time + " start get a useful file from metadb for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + keyinterval);
         Object[] ob = new Object[3];
         String getsendIP = "";
         Long getf_id = 0L;
@@ -529,10 +542,10 @@ public class SendToServiceThread implements Runnable {
                     logger.error("can not get the SFileList for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + keyinterval + ex, ex);
                     rcmetastore(icli);
                     attemp++;
-                    try {
-                        Thread.sleep(2000);
-                    } catch (Exception e) {
-                    }
+//                    try {
+//                        Thread.sleep(2000);
+//                    } catch (Exception e) {
+//                    }
                 }
             }
 
@@ -644,10 +657,10 @@ public class SendToServiceThread implements Runnable {
                     rcmetastore(icli);
                     attemp++;
                 }
-                try {
-                    Thread.sleep(1000);
-                } catch (Exception e) {
-                }
+//                try {
+//                    Thread.sleep(1000);
+//                } catch (Exception e) {
+//                }
             }
 
             if (lsf != null && !lsf.isEmpty()) {
@@ -749,6 +762,8 @@ public class SendToServiceThread implements Runnable {
 
                             attemp = 0;
                             while (attemp <= attempSize) {
+                                Date date = new Date();
+                                String time = dateFormat2.format(date);
                                 try {
                                     if (icli.reopen_file(aomlsf.getFid())) {
                                         Long oldf_id = aomlsf.getFid();
@@ -761,31 +776,29 @@ public class SendToServiceThread implements Runnable {
                                                 logger.error("can not get the file " + oldf_id);
                                                 rcmetastore(icli);
                                                 attemp++;
-                                                try {
-                                                    Thread.sleep(2000);
-                                                } catch (Exception e1) {
-                                                }
                                             }
                                         }
-                                        logger.info("reopen the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " successfully");
+                                        logger.info(time + " reopen the file for " + topic + " " + keyinterval + " " + node.getName() + " " + aomlsf + " successfully");
                                         break;
                                     } else {
-                                        logger.info("can not reopen the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName());
+                                        logger.info(time + " cannotreopen the file for " + topic + " " + keyinterval + " " + node.getName() + " " + aomlsf);
                                         attemp++;
                                     }
                                 } catch (Exception ex) {
-                                    logger.error("can not reopen the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + ex, ex);
+                                    logger.error(time + " cannotreopen the file for " + topic + " " + keyinterval + " " + node.getName() + " " + aomlsf + ex, ex);
                                     rcmetastore(icli);
                                     attemp++;
                                 }
-                                try {
-                                    Thread.sleep(2000);
-                                } catch (Exception e) {
-                                }
+//                                try {
+//                                    Thread.sleep(2000);
+//                                } catch (Exception e) {
+//                                }
                             }
 
                             if (aomlsf.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
-                                logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has been reopened");
+                                Date date = new Date();
+                                String time = dateFormat2.format(date);
+                                logger.info(time + " the file for " + topic + " " + keyinterval + " " + node.getName() + " has been reopened " + aomlsf);
 
                                 int visit = -1;
                                 if (aomlsf.getLocations() == null) {
@@ -833,7 +846,7 @@ public class SendToServiceThread implements Runnable {
                                 }
                             } else {
                                 alsf.remove(aomlsf);
-                                logger.info("can not reopen the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName());
+                                logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has not been reopened");
                             }
                         }
                     } else {
@@ -890,10 +903,10 @@ public class SendToServiceThread implements Runnable {
                     rcmetastore(icli);
                     attemp++;
                 }
-                try {
-                    Thread.sleep(500);
-                } catch (Exception e) {
-                }
+//                try {
+//                    Thread.sleep(500);
+//                } catch (Exception e) {
+//                }
             }
 
             ArrayList<String> nodeNames = new ArrayList<String>();
@@ -910,7 +923,9 @@ public class SendToServiceThread implements Runnable {
 
             while (true) {
                 try {
-                    logger.info("begin to create file for " + topic + " " + keyinterval + " " + node.getName() + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1]);
+                    Date date = new Date();
+                    String time = dateFormat2.format(date);
+                    logger.info(time + " begin to create file for " + topic + " " + keyinterval + " " + node.getName() + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1]);
                     sf2 = icli.create_file_by_policy(cp, 2, partT.split("\\|")[0], partT.split("\\|")[1], list);
                     if (sf2 == null) {
                         if (CFretryInterval < 30000) {
@@ -926,7 +941,7 @@ public class SendToServiceThread implements Runnable {
                         }
                         continue;
                     }
-                    logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + " from metastore successfully");
+                    logger.info( time + " create file from metastore successfully for " + topic + " " + keyinterval + " " + node.getName());
                     String nodeN = sf2.getLocations().get(0).getNode_name();
                     if (nodeN == null) {
                         if (nodeNames.isEmpty()) {
@@ -1063,7 +1078,7 @@ public class SendToServiceThread implements Runnable {
 
                                 continue;
                             } else {
-                                logger.info("this file " + f_id + " for " + topic + " " + keyinterval + " " + node.getName() + " to the road " + road + " to the IP " + sendIP + " has been set online");
+                                logger.info(time + " this file " + f_id + " " + topic + " " + keyinterval + " " + node.getName() + " " + road + " " + sendIP + " has been set online");
                                 ob[0] = sendIP;
                                 ob[1] = f_id;
                                 ob[2] = road;
@@ -1105,7 +1120,9 @@ public class SendToServiceThread implements Runnable {
         while (attemp <= attempSize) {
             try {
                 icli.set_loadstatus_bad(sf.getFid());
-                logger.info("has set bad the file " + sf);
+                Date date = new Date();
+                String time = dateFormat2.format(date);
+                logger.info(time + " has set bad the file " + sf);
                 break;
             } catch (Exception ex) {
                 logger.error("can not set bad the file " + sf + " " + ex, ex);

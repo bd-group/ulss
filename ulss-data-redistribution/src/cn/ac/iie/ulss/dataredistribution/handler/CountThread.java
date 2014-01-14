@@ -19,7 +19,7 @@ import org.apache.log4j.PropertyConfigurator;
 class CountThread implements Runnable {
 
     static Date date = null;
-    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd:HH");
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -55,11 +55,11 @@ class CountThread implements Runnable {
             }
             String time = dateFormat.format(date);
             for (String topic : topicToAcceptCount.keySet()) {
-                logger.info( time + "this hour accept " + topicToAcceptCount.get(topic) + " messages from " + topic);
+                logger.info( time + " this hour accept " + topicToAcceptCount.get(topic) + " messages from " + topic);
             }
 
             for (String rule : ruleToCount.keySet()) {
-                logger.info( time + "this hour send " + ruleToCount.get(rule) + " messages for " + rule);
+                logger.info( time + " this hour send " + ruleToCount.get(rule) + " messages for " + rule);
             }
         }
     }

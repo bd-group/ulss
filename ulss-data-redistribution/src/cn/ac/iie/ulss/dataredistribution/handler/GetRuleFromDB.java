@@ -17,6 +17,7 @@ import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -39,25 +40,24 @@ import org.apache.log4j.PropertyConfigurator;
  * @author evan yang
  */
 public class GetRuleFromDB {
-    
+
     String time = null;
     ConcurrentHashMap<String, ArrayList<Rule>> topicToRules = null;
     ArrayList<String> transmitrule = null;
-
     public static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private SimpleDaoImpl simpleDao = null;
     int attempSize = 1;
     static Logger logger = null;
-    
+
     static {
         PropertyConfigurator.configure("log4j.properties");
         logger = Logger.getLogger(GetRuleFromDB.class.getName());
     }
-    
+
     public void start() {
         topicToRules = (ConcurrentHashMap<String, ArrayList<Rule>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_RULES);
         transmitrule = (ArrayList<String>) RuntimeEnv.getParam(GlobalVariables.TRANSMITRULE);
-        
+
         getRules(); //get rules from the oracle
 
         MessageTransferStation.init(topicToRules); // initialise the message transfer station 
@@ -71,21 +71,21 @@ public class GetRuleFromDB {
             tt.setName("TopicThread-" + topickey);
             tt.start();
         }
-        
+
         GetMessageFromMetaStore gmfms = new GetMessageFromMetaStore(); // getting the change message from the metastore
         Thread tgmfms = new Thread(gmfms);
         tgmfms.setName("GetMessageFromMetaStore");
         tgmfms.start();
-        
+
 //        DetectTransmitRule dtr = new DetectTransmitRule();
 //        Thread tdtr = new Thread(dtr);
 //        tdtr.setName("DetectTransmitRule");
 //        tdtr.start();
-        
+
         CountThread act = new CountThread();
         Thread tact = new Thread(act);
         tact.setName("AcceptCountThread");
-        tact.start();    
+        tact.start();
     }
 
     /**
@@ -104,14 +104,14 @@ public class GetRuleFromDB {
         List<String> groups = Arrays.asList(group);
         for (List<String> r : newRs) {
             String gr = r.get(6);
-            
+
             if (gr == null || gr.equals("")) {
                 logger.info("a rule has no group");
             } else if (gr.equals("0")) {
             } else if (groups.contains(gr)) {
-                
+
                 String topic = r.get(0);
-                
+
                 if (topic == null || topic.equals("")) {
                     logger.error("the topic in the rule is null or wrong " + topic);
                     continue;
@@ -121,9 +121,9 @@ public class GetRuleFromDB {
                         continue;
                     }
                 }
-                
+
                 String serviceName = r.get(1);
-                
+
                 if (serviceName == null || serviceName.equals("")) {
                     logger.error("the serviceName in the rule is null or wrong " + topic);
                     continue;
@@ -133,9 +133,9 @@ public class GetRuleFromDB {
                         continue;
                     }
                 }
-                
+
                 String nodeUrls = r.get(2);
-                
+
                 if (nodeUrls == null || nodeUrls.equals("")) {
                     logger.error("the nodeUrls in the rule is null or wrong");
                     continue;
@@ -145,7 +145,7 @@ public class GetRuleFromDB {
                         continue;
                     }
                 }
-                
+
                 int type = -1;
                 try {
                     type = Integer.parseInt(r.get(3));
@@ -157,28 +157,28 @@ public class GetRuleFromDB {
                     logger.error("the rule_type in the rule is null or wrong " + topic + e, e);
                     continue;
                 }
-                
+
                 String keywords = r.get(4);
                 if (keywords != null) {
                     keywords = keywords.trim();
                 }
-                
+
                 String filters = r.get(5);
                 if (filters != null) {
                     filters = filters.trim();
                 }
-                
+
                 String region = r.get(7);
                 if (region != null) {
                     region = region.trim();
                 }
-                
+
                 MD5NodeLocator nodelocator = null;
                 String[] IPList = null;
                 Map<RNode, String> nodeToIP = new HashMap<RNode, String>();
                 ArrayList<String> deadIP = new ArrayList<String>();
                 String partType = null;
-                
+
                 if (type == 0 || type == 1 || type == 2 || type == 3) {
                     transmitrule.add(topic + serviceName);
                     IPList = nodeUrls.split("\\;");
@@ -192,9 +192,10 @@ public class GetRuleFromDB {
                     DynamicAllocate dynamicallocate = new DynamicAllocate();
                     dynamicallocate.setNodes(nurl);
                     nodelocator = dynamicallocate.getMD5NodeLocator();
-                    
+
                     Rule s = new Rule(topic, serviceName, nurl, type, keywords, filters, nodelocator, IPList, nodeToIP, deadIP, partType);
-                    
+                    logger.info(new Date() + "this rule is useful" + topic + " " + serviceName + " " + type + " " + keywords + " " + filters);
+
                     if (topicToRules.containsKey(topic)) {
                         ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(topic);
                         set.add(s);
@@ -207,9 +208,10 @@ public class GetRuleFromDB {
                     if (regions.contains(region)) {
                         Rule s = null;
                         s = getFromMetaStore(topic, serviceName, nodeUrls, type, keywords, filters, region);
-                        
+
                         if (s != null) {
                             transmitrule.add(topic + serviceName);
+                            logger.info(new Date() + "this rule is useful" + topic + " " + serviceName + " " + s.getPartType() + " " + s.getNodeUrls().size());
                             if (topicToRules.containsKey(topic)) {
                                 ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(topic);
                                 set.add(s);
@@ -233,7 +235,7 @@ public class GetRuleFromDB {
                 logger.error("the group is not in groups");
             }
         }
-        
+
         logger.info("parsing data schemas is finished");
     }
 
@@ -267,44 +269,44 @@ public class GetRuleFromDB {
             IMetaStoreClient icli = cli.getHiveClient();
             logger.info("connected the metastore");
             Table bf_dxx = null;
-            
+
             Map<String, String> topicToTBName = (Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_TBNAME);
-            
+
             int attemp = 0;
             while (attemp <= attempSize) {
                 try {
                     bf_dxx = icli.getTable(region, topicToTBName.get(topic));
                     List<FieldSchema> allSplitKeys = bf_dxx.getFileSplitKeys();
                     List<FieldSchema> splitKeys = new ArrayList<FieldSchema>();
-                    
+
                     Long version = 0L;
                     for (FieldSchema fs : allSplitKeys) {
                         if (fs.getVersion() >= version) {
                             version = fs.getVersion();
                         }
                     }
-                    
+
                     for (FieldSchema fs : allSplitKeys) {
                         if (fs.getVersion() == version) {
                             splitKeys.add(fs);
                         }
                     }
                     logger.info("the fieldScahma " + version + " has " + splitKeys.size() + " splitKeys");
-                    
+
                     if (splitKeys.isEmpty()) {
                         logger.info("There is no splitkeys in the table " + topicToTBName.get(topic));
                         return null;
                     }
-                    
+
                     String split_name_l1 = "";
                     String split_name_l2 = "";
                     String part_type_l1 = "";
                     String part_type_l2 = "";
                     int l1_part_num = 0;
                     int l2_part_num = 0;
-                    
+
                     List<PartitionInfo> pis = PartitionInfo.getPartitionInfo(splitKeys);
-                    
+
                     if (pis.size() == 2) {
                         StringBuilder tmps = new StringBuilder();
                         tmps.append(region);
@@ -337,7 +339,7 @@ public class GetRuleFromDB {
                                     return null;
                                 }
                             }
-                            
+
                             if (pinfo.getP_level() == 2) {
                                 split_name_l2 = pinfo.getP_col();
                                 part_type_l2 = pinfo.getP_type().getName();
