@@ -1,7 +1,7 @@
 /*
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
- */  
+ */
 package cn.ac.iie.ulss.match.datahandler;
 
 import cn.ac.iie.ulss.match.worker.BusiMatchworker;
@@ -161,6 +161,8 @@ public class HttpDataHandler extends AbstractHandler {
                 }
             } else {
                 List<BusiMatchworker> workers = Matcher.schemaInstance2BusiMatchworkers.get(schemanameInstance);
+
+
                 synchronized (HttpDataHandler.lock) {
                     try {
                         if (Matcher.schemaInstance2MatchControler.get(schemanameInstance).isShouldNew.get()) {
@@ -183,6 +185,7 @@ public class HttpDataHandler extends AbstractHandler {
                         log.error(ex, ex);
                     }
                 }
+
                 BusiMatchworker worker = null;
                 ConcurrentHashMap<Integer, LinkedBlockingQueue<BusiRecordNode>> tmpBuf = null;
 
@@ -206,13 +209,16 @@ public class HttpDataHandler extends AbstractHandler {
                         index = worker.httpReceiveBufferIndex.get();
                         if (!tmpBuf.get(index).offer(tmp)) {
                             String sizes = tmpBuf.get(index).remainingCapacity() + " ：";
-                            for (LinkedBlockingQueue<BusiRecordNode> buf : worker.inbuffer.values()) {
-                                sizes += buf.remainingCapacity() + " ";
+//                            for (LinkedBlockingQueue<BusiRecordNode> buf : worker.inbuffer.values()) {
+//                                sizes += buf.remainingCapacity() + " ";
+//                            }
+                            for (int idx = 0; idx < worker.inbuffer.size(); idx++) {
+                                sizes += idx + ":" + worker.inbuffer.get(idx).remainingCapacity() + " ";
                             }
                             log.warn("now current window buffer is full,the current buffer index and all buffer remainingCapacity size is：" + schemanameInstance + "[ " + index + " ]" + " -> " + sizes);
                             while (true) {
                                 try {
-                                    Thread.sleep(800);
+                                    Thread.sleep(100);
                                 } catch (Exception e) {
                                     log.error(e, e);
                                 }
@@ -359,7 +365,7 @@ public class HttpDataHandler extends AbstractHandler {
                                         bufferIndex = Math.abs(rdom.nextInt()) % worker.inbuffer.size();
                                         worker.inbuffer.get(bufferIndex).put(brc);
                                     }
-                                } catch (InterruptedException ex) {
+                                } catch (Exception ex) {
                                     log.error(ex, ex);
                                 }
                             }

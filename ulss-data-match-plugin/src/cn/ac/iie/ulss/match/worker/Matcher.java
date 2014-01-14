@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.logging.Level;
 import org.I0Itec.zkclient.ZkClient;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
@@ -38,7 +39,7 @@ public class Matcher {
     public static String docs_set_name = "doc_set";
     public static String docsName = "docs";
     /*
-     * 
+     *
      */
     public static String rawdataCachePath = "";
     public static String positionDumpPath = "";
@@ -68,7 +69,7 @@ public class Matcher {
      */
     public static int maxProcessCdrPerMillis = 20;
     /*
-     * about position dump 
+     * about position dump
      */
     public static int maxStorePositionPerNumber = 2;
     public static int posDumpIntervalMiliSeconds = 43200;
@@ -305,12 +306,9 @@ public class Matcher {
         Matcher.zc = new ZkClient(zkUrl = cfg.getProperty("zkUrl"));
         Matcher.httpPoolNum = cfg.getIntProperty("httpPoolNum");
         Matcher.sendBatchSizeNum = cfg.getIntProperty("batchSendNum");
-        Matcher.matchThreadNum = cfg.getIntProperty("matchThreadNum");
         Matcher.cdrUpdateThreadNum = cfg.getIntProperty("cdrThreadNum");
         /**/
-        Matcher.busidataInbufferSize = cfg.getIntProperty("inbufferSize");
         Matcher.cdrInbufferSize = cfg.getIntProperty("cdrInbufferSize");
-        Matcher.outbufferSize = cfg.getIntProperty("outbufferSize");
         Matcher.rawdataCachePath = cfg.getProperty("matchcachePath");
         Matcher.positionDumpPath = cfg.getProperty("positionDumpPath");
         /**/
@@ -330,8 +328,8 @@ public class Matcher {
         busiTypes.addAll(Arrays.asList(args));
 
         HashMap<String, List<MatchControler>> busiControlerMap = Matcher.initBusiWorkers(busiTypes);
-        log.info("init the sent thread ... \n");
 
+        log.info("init the sent thread ... \n");
         String[] regions = Matcher.allregions;
         for (int m = 0; m < regions.length; m++) {
             String busiTypeInstance = "";
@@ -366,10 +364,15 @@ public class Matcher {
                 } else if ("hlw".equalsIgnoreCase(busiData)) {
                     log.info("new the  send thread for the hlw and cdr ");
                     for (MatchControler mc : busiControlerMap.get(busiTypeInstance)) {//实际只有一个MatchControler，最终的效果是只有一个发送线程5i///////////////////////////////////////////////////////////////、                                   '                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              /////                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     '''''''''                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-                        for (int i = 0; i < 4; i++) {
+                        for (int i = 0; i < 6; i++) {
                             SendHlwData ssd = new SendHlwData(s, mc.resultSchemaName, Matcher.sendBatchSizeNum, mc.outBuf);
                             Thread senThread = new Thread(ssd);
                             senThread.start();
+                            try {
+                                Thread.sleep(200);
+                            } catch (Exception ex) {
+                                log.error(ex, ex);
+                            }
                         }
                     }
                 } else {

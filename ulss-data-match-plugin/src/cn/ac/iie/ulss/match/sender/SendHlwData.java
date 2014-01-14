@@ -79,23 +79,25 @@ public class SendHlwData implements Runnable {
     @Override
     public void run() {
         long count = 0;
-        long sleepCount = 0;
+        long currentTime = System.currentTimeMillis();
+        long sendTime = System.currentTimeMillis();
         List<GenericRecord> tmp = new ArrayList<GenericRecord>();
         while (true) {
             try {
-                Thread.sleep(10);
+                Thread.sleep(5);
             } catch (InterruptedException ex) {
             }
             if (outBuf.isEmpty()) {
-                if (sleepCount >= 500 && !tmp.isEmpty()) {
+                currentTime = System.currentTimeMillis();
+                if (currentTime - sendTime >= 2000 && !tmp.isEmpty()) {
                     try {
                         this.send(this.packData(tmp));
                         log.info("now send data num in total is -> " + this.schemanameInstance + ":" + Matcher.schemanameInstance2Sendtotal.get(this.schemanameInstance).addAndGet(tmp.size()));
+                        sendTime = System.currentTimeMillis();
                     } catch (Exception ex) {
                         log.error(ex, ex);
                     }
                     tmp.clear();
-                    sleepCount = 0;
                 }
             } else {
                 while (!outBuf.isEmpty()) {
@@ -107,12 +109,12 @@ public class SendHlwData implements Runnable {
                     if (tmp.size() % batchSize == 0) {
                         try {
                             this.send(this.packData(tmp));
-                            log.info("now send data num in total is -> "+ this.schemanameInstance+ ":" + Matcher.schemanameInstance2Sendtotal.get(this.schemanameInstance).addAndGet(tmp.size()));
+                            log.info("now send data num in total is -> " + this.schemanameInstance + ":" + Matcher.schemanameInstance2Sendtotal.get(this.schemanameInstance).addAndGet(tmp.size()));
+                            sendTime = System.currentTimeMillis();
                         } catch (Exception ex) {
                             log.error(ex, ex);
                         }
                         tmp.clear();
-                        sleepCount = 0;
                     }
                 }
             }

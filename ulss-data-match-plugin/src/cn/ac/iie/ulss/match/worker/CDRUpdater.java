@@ -5,7 +5,6 @@
 package cn.ac.iie.ulss.match.worker;
 
 import cn.ac.iie.ulss.struct.CDRRecordNode;
-import cn.ac.iie.ulss.util.SimpleHash;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -65,6 +64,7 @@ public class CDRUpdater implements Runnable {
     @Override
     public void run() {
         long bg = 0;
+        long hashcode = 0l;
         long bucket = 0;
         long updateCount = 0;
         long cdrKeyCount = 0;
@@ -86,6 +86,7 @@ public class CDRUpdater implements Runnable {
         CDRRecordNode tmpRec;
         List<CDRRecordNode> posRecords;
         List<CDRRecordNode> innerBuf = new ArrayList<CDRRecordNode>();
+        ConcurrentHashMap<String, List<CDRRecordNode>> currentLevel2Map = null;
         old = cur = System.currentTimeMillis();
         while (true) {
             try {
@@ -126,10 +127,15 @@ public class CDRUpdater implements Runnable {
                             log.error(ex, ex);
                         }
                     }
-                    bucket = SimpleHash.getSimpleHash(strKey) % Matcher.topMapSize;
+                    hashcode = strKey.hashCode();
+                    if (hashcode < 0) {
+                        hashcode = -hashcode;
+                    }
+                    bucket = hashcode % Matcher.topMapSize;
+                    currentLevel2Map = topMap.get(bucket);
 
-                    synchronized (this.lk) {
-                        posRecords = topMap.get(bucket).get(strKey);
+                    synchronized (currentLevel2Map) {
+                        posRecords = currentLevel2Map.get(strKey);
                         if (posRecords != null && posRecords.size() > 0) {   //开始更新对应的cdr的位置信息，update或者insert操作
                             updatePos(cdrRec, posRecords);
                         } else { //为对应的key插入一条位置信息 只有insert操作
@@ -220,13 +226,14 @@ public class CDRUpdater implements Runnable {
             log.info("now begin clear the cdr position map,will remove some zombie numbers ... ");
             try {
                 Iterator iter = topMap.values().iterator();
+                boolean shouldDelete = true;
                 while (iter.hasNext()) {
                     map = (ConcurrentHashMap<String, List<CDRRecordNode>>) iter.next();
                     Iterator it = map.keySet().iterator();
                     while (it.hasNext()) {
                         key = (String) it.next();
                         tmp = map.get(key);
-                        boolean shouldDelete = true;
+                        shouldDelete = true;
                         for (CDRRecordNode tm : tmp) {
                             if ((System.currentTimeMillis() - tm.updateTime) < Matcher.maxPosStoreMiliSeconds) {
                                 shouldDelete = false;

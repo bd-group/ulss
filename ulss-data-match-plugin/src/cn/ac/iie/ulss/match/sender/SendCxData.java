@@ -42,6 +42,9 @@ public class SendCxData implements Runnable {
     /**/
     public ConcurrentHashMap<String, MQProducerPool> MQProducer = new ConcurrentHashMap<String, MQProducerPool>();
     public ConcurrentHashMap<String, LinkedBlockingQueue> BufferMap = new ConcurrentHashMap<String, LinkedBlockingQueue>();
+    /*
+     */
+    public ConcurrentHashMap<String, Long> sendgabMap = new ConcurrentHashMap<String, Long>();
     /**/
     public LinkedBlockingQueue<GenericRecord> cxBuf;
     public LinkedBlockingQueue<GenericRecord> t_cx_rzBuf = new LinkedBlockingQueue<GenericRecord>(20000);
@@ -97,6 +100,11 @@ public class SendCxData implements Runnable {
         BufferMap.put(region + "_" + "t_cx_rz_zt", t_cx_rz_ztBuf);
         BufferMap.put(region + "_" + "t_cx_rz_mddz", t_cx_rz_mddzBuf);
         BufferMap.put(region + "_" + "t_cx_rz_mtzx", t_cx_rz_mtzxBuf);
+
+        sendgabMap.put(region + "_" + "t_cx_rz", System.currentTimeMillis());
+        sendgabMap.put(region + "_" + "t_cx_rz_zt", System.currentTimeMillis());
+        sendgabMap.put(region + "_" + "t_cx_rz_mddz", System.currentTimeMillis());
+        sendgabMap.put(region + "_" + "t_cx_rz_mtzx", System.currentTimeMillis());
 
         Protocol protocol = Protocol.parse(Matcher.DBMeta.getSchema("t_cx_mq").get(0).get(1).toLowerCase());//原始的schema
 
@@ -259,7 +267,8 @@ public class SendCxData implements Runnable {
     @Override
     public void run() {
         long count = 0;
-        long sleepCount = 0;
+        long currentTime = System.currentTimeMillis();
+
         log.info("start the special send cx thread ");
         ConcurrentHashMap<String, List> listMap = new ConcurrentHashMap<String, List>();
         for (String s : BufferMap.keySet()) {
@@ -272,7 +281,6 @@ public class SendCxData implements Runnable {
         while (true) {
             try {
                 Thread.sleep(10);
-                sleepCount += 10;
             } catch (InterruptedException ex) {
             }
             while (!this.cxBuf.isEmpty()) {
@@ -295,15 +303,16 @@ public class SendCxData implements Runnable {
                     List tmp = listMap.get(s);
                     LinkedBlockingQueue<GenericRecord> buf = BufferMap.get(s);
                     if (buf.isEmpty()) {
-                        if (sleepCount >= 500 && !tmp.isEmpty()) {
+                        currentTime = System.currentTimeMillis();
+                        if ((currentTime - this.sendgabMap.get(s)) >= 5000 && !tmp.isEmpty()) {
                             try {
                                 log.info("now send data num in total is -> " + s + ":" + Matcher.schemanameInstance2Sendtotal.get(s).addAndGet(tmp.size()));
                                 MQProducer.get(s).sendMessage(this.packData(tmp, s));
+                                this.sendgabMap.put(s, currentTime);
                             } catch (Exception ex) {
                                 log.error(ex, ex);
                             }
                             tmp.clear();
-                            sleepCount = 0;
                         }
                     } else {
                         while (!buf.isEmpty()) {
@@ -315,12 +324,13 @@ public class SendCxData implements Runnable {
                             if (tmp.size() % batchSize == 0) {
                                 try {
                                     log.info("now send data num in total is -> " + s + ":" + Matcher.schemanameInstance2Sendtotal.get(s).addAndGet(tmp.size()));
+                                    currentTime = System.currentTimeMillis();
                                     MQProducer.get(s).sendMessage(this.packData(tmp, s));
+                                    this.sendgabMap.put(s, currentTime);
                                 } catch (Exception ex) {
                                     log.error(ex, ex);
                                 }
                                 tmp.clear();
-                                sleepCount = 0;
                             }
                         }
                     }

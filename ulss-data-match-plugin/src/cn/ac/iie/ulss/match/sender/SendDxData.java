@@ -47,6 +47,9 @@ public class SendDxData implements Runnable {
     public ConcurrentHashMap<String, LinkedBlockingQueue> BufferMap = new ConcurrentHashMap<String, LinkedBlockingQueue>();
     /*
      */
+    public ConcurrentHashMap<String, Long> sendgabMap = new ConcurrentHashMap<String, Long>();
+    /*
+     */
     public LinkedBlockingQueue<GenericRecord> dxBuf;
     public LinkedBlockingQueue<GenericRecord> jkdxBuf = new LinkedBlockingQueue<GenericRecord>(5000);
     public LinkedBlockingQueue<GenericRecord> qydxBuf = new LinkedBlockingQueue<GenericRecord>(100000);
@@ -94,8 +97,14 @@ public class SendDxData implements Runnable {
         BufferMap.put(region + "." + "t_dx_rz_gldx", gldxBuf);
         BufferMap.put(region + "." + "t_dx_rz_ccdx", ccdxBuf);
 
-        Protocol protocol = Protocol.parse(Matcher.DBMeta.getSchema(region, "dx").get(0).get(1).toLowerCase());
-        dxSchema = protocol.getType("dx");
+        sendgabMap.put(region + "." + "t_dx_rz_jkdx", System.currentTimeMillis());
+        sendgabMap.put(region + "." + "t_dx_rz_qydx", System.currentTimeMillis());
+        sendgabMap.put(region + "." + "t_dx_rz_gldx", System.currentTimeMillis());
+        sendgabMap.put(region + "." + "t_dx_rz_ccdx", System.currentTimeMillis());
+
+
+        Protocol protocol = Protocol.parse(Matcher.DBMeta.getSchema(region, "dx_cdr").get(0).get(1).toLowerCase());
+        dxSchema = protocol.getType("dx_cdr");
         for (Field f : dxSchema.getFields()) {
             dxFieldNames.add(f.name().toLowerCase());
         }
@@ -291,6 +300,7 @@ public class SendDxData implements Runnable {
                 record.put(f.name(), gr.get(f.name()));
             }
         }
+        log.debug(record);
         return record;
     }
 
@@ -308,6 +318,7 @@ public class SendDxData implements Runnable {
                 }
             }
         }
+        log.debug(record);
         return record;
     }
 
@@ -350,20 +361,19 @@ public class SendDxData implements Runnable {
     @Override
     public void run() {
         long count = 0;
-        long sleepCount = 0;
         log.info("start the special send dx thread ");
         ConcurrentHashMap<String, List> listMap = new ConcurrentHashMap<String, List>();
         for (String s : BufferMap.keySet()) {
             listMap.put(s, new ArrayList());
         }
 
+        long currentTime = System.currentTimeMillis();
         boolean isOK = true;
         GenericRecord dxRecord = null;
         GenericRecord failRecord = null;
         while (true) {
             try {
                 Thread.sleep(10);
-                sleepCount += 10;
             } catch (InterruptedException ex) {
             }
             while (!this.dxBuf.isEmpty()) {
@@ -384,19 +394,21 @@ public class SendDxData implements Runnable {
                 } catch (Exception ex) {
                     log.error(ex, ex);
                 }
+
                 for (String s : BufferMap.keySet()) {
                     List tmp = listMap.get(s);
                     LinkedBlockingQueue<GenericRecord> buf = BufferMap.get(s);
                     if (buf.isEmpty()) {
-                        if (sleepCount >= 500 && !tmp.isEmpty()) {
+                        currentTime = System.currentTimeMillis();
+                        if ((currentTime - this.sendgabMap.get(s)) >= 5000 && !tmp.isEmpty()) {
                             try {
                                 log.info("now send data num in total is -> " + s + ":" + Matcher.schemanameInstance2Sendtotal.get(s).addAndGet(tmp.size()));
                                 MQProducer.get(s).sendMessage(this.packData(tmp, s.split("[.]")[1]));
+                                this.sendgabMap.put(s, currentTime);
                             } catch (Exception ex) {
                                 log.error(ex, ex);
                             }
                             tmp.clear();
-                            sleepCount = 0;
                         }
                     } else {
                         while (!buf.isEmpty()) {
@@ -408,12 +420,13 @@ public class SendDxData implements Runnable {
                             if (tmp.size() % batchSize == 0) {
                                 try {
                                     log.info("now send data num in total is -> " + s + ":" + Matcher.schemanameInstance2Sendtotal.get(s).addAndGet(tmp.size()));
+                                    currentTime = System.currentTimeMillis();
                                     MQProducer.get(s).sendMessage(this.packData(tmp, s.split("[.]")[1]));
+                                    this.sendgabMap.put(s, currentTime);
                                 } catch (Exception ex) {
                                     log.error(ex, ex);
                                 }
                                 tmp.clear();
-                                sleepCount = 0;
                             }
                         }
                     }

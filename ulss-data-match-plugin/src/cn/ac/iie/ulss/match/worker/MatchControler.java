@@ -115,11 +115,11 @@ public class MatchControler implements Runnable {
 
     @Override
     public void run() {
-        Thread[] threads = new Thread[Matcher.matchThreadNum];
-        for (int i = 0; i < Matcher.matchThreadNum; i++) {
+        Thread[] threads = new Thread[this.matchThreadNumber];
+        for (int i = 0; i < this.matchThreadNumber; i++) {
             threads[i] = new Thread(matchWorkers[i]);
         }
-        for (int i = 0; i < Matcher.matchThreadNum; i++) {
+        for (int i = 0; i < this.matchThreadNumber; i++) {
             threads[i].setName(this.region + "." + this.schemaName + "-" + i);
             threads[i].start();
         }

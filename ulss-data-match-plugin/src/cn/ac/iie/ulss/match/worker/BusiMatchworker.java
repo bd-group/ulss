@@ -6,7 +6,6 @@ package cn.ac.iie.ulss.match.worker;
 
 import cn.ac.iie.ulss.struct.BusiRecordNode;
 import cn.ac.iie.ulss.struct.CDRRecordNode;
-import cn.ac.iie.ulss.util.SimpleHash;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -112,6 +111,10 @@ public class BusiMatchworker implements Runnable {
             log.error(e, e);
             return;
         }
+
+        int recordFieldIdx = 0;
+        int arrayIndex = 0;
+        long hashcode = 0l;
         long bucket = 0;
         long bufferSize = 0;
         long remainCap = 0;
@@ -119,12 +122,15 @@ public class BusiMatchworker implements Runnable {
         long s2 = 0;
         Object tmpObj = null;
         String strKey = null;
-        CDRRecordNode tmpCdrRecord = null;
+        StringBuilder sb = new StringBuilder(100);
+
         BusiRecordNode tmpBusiRecord = null;
         List<CDRRecordNode> CDRRecords = null;
+        CDRRecordNode tmpCdrRecord = null;
         List<LinkedBlockingQueue<BusiRecordNode>> buffers = new ArrayList<LinkedBlockingQueue<BusiRecordNode>>();
         Schema resSchema = Matcher.schemaname2Schema.get(this.resultSchemaName); //比对结果的schema
-        CDRRecordNode[] tmpArray = new CDRRecordNode[2];
+        CDRRecordNode[] tmpArray = new CDRRecordNode[Matcher.maxStorePositionPerNumber];
+        ConcurrentHashMap<String, List<CDRRecordNode>> currentLevel2Map = null;
         while (true) {
             if (!this.isBegin.get()) {
                 try {
@@ -148,67 +154,82 @@ public class BusiMatchworker implements Runnable {
 
                 log.info("now begin do the match for dataflow " + this.schemanameInstance);
                 AtomicLong num = Matcher.schemanameInstance2MatchOKTotal.get(this.schemanameInstance);
+
                 int okNum = 0;
+                int totalMatchNum = 0;
+                long bgMatchTime = System.currentTimeMillis();
                 for (LinkedBlockingQueue<BusiRecordNode> buf : buffers) {
+                    totalMatchNum += buf.size();
                     Iterator<BusiRecordNode> it = buf.iterator();
                     while (it.hasNext()) {
                         tmpBusiRecord = it.next();
                         if (tmpBusiRecord != null && tmpBusiRecord.state == 0) {
-                            strKey = "";
-                            for (String s : accurateJoinAttributes) {
-                                tmpObj = tmpBusiRecord.genRecord.get(s);
+                            for (String ss : accurateJoinAttributes) {
+                                tmpObj = tmpBusiRecord.genRecord.get(ss);
                                 if (tmpObj != null) {
-                                    strKey += tmpObj.toString();
+                                    sb.append(tmpObj);
                                 } else {
-                                    log.debug("the field " + s + "  is null");
+                                    log.debug("the field " + ss + "  is null");
                                 }
                             }
-                            bucket = SimpleHash.getSimpleHash(strKey) % Matcher.topMapSize;
-
-                            synchronized (this.lk) {
-                                if ((CDRRecords = topMatchMap.get(bucket).get(strKey)) != null) {
-                                    tmpArray = CDRRecords.toArray(tmpArray);
-                                }
+                            strKey = sb.toString();
+                            sb = sb.delete(0, sb.length());
+                            if ("".equals(strKey)) {
+                                continue;
                             }
 
-                            if (tmpArray.length > 0) {
-                                for (int j = 0; j < tmpArray.length; j++) {
-                                    tmpCdrRecord = tmpArray[j];
-                                    if (tmpCdrRecord == null) {
-                                        continue;
+                            hashcode = strKey.hashCode();
+                            if (hashcode < 0) {
+                                hashcode = -hashcode;
+                            }
+                            bucket = hashcode % Matcher.topMapSize;
+                            currentLevel2Map = topMatchMap.get(bucket);
+
+                            //synchronized (currentLevel2Map) {
+                            if ((CDRRecords = currentLevel2Map.get(strKey)) != null) {
+                                tmpArray = CDRRecords.toArray(tmpArray);
+                                //okNum++;
+                            }
+                            //}
+                            for (arrayIndex = 0; arrayIndex < tmpArray.length; arrayIndex++) {
+                                tmpCdrRecord = tmpArray[arrayIndex];
+                                if (tmpCdrRecord == null) {
+                                    continue;
+                                }
+                                s1 = (Long) tmpBusiRecord.getGenericRecord().get(this.fuzzyJoinAttribute);//得到自己的时间戳
+                                s2 = (Long) tmpCdrRecord.c_timestamp;
+                                if (Math.abs(s1 - s2) <= this.maxDeviation) {   //判断是否比对上
+                                    GenericRecord record = new GenericData.Record(resSchema);
+                                    for (recordFieldIdx = 0; recordFieldIdx < this.resultOwnAttributes.length; recordFieldIdx++) {
+                                        record.put(resultOwnAttributes[recordFieldIdx], tmpBusiRecord.genRecord.get(resultOwnAttributes[recordFieldIdx].toLowerCase()));
                                     }
-                                    s1 = (Long) tmpBusiRecord.getGenericRecord().get(this.fuzzyJoinAttribute);//得到自己的时间戳
-                                    s2 = (Long) tmpCdrRecord.c_timestamp;
-                                    if (Math.abs(s1 - s2) <= this.maxDeviation) {   //判断是否比对上
-                                        GenericRecord record = new GenericData.Record(resSchema);
-                                        for (int i = 0; i < this.resultOwnAttributes.length; i++) {
-                                            record.put(resultOwnAttributes[i], tmpBusiRecord.genRecord.get(resultOwnAttributes[i].toLowerCase()));
-                                        }
-                                        for (int i = 0; i < this.resultOtherAttributes.length; i++) {
-                                            try {
-                                                record.put(resultOwnAttributes.length + i, methodMap.get("get" + resultOtherAttributes[i].toLowerCase()).invoke(tmpCdrRecord));
-                                            } catch (Exception ex) {
-                                                log.error(ex, ex);
-                                            }
-                                        }
-                                        tmpBusiRecord.state = 1;
+                                    for (recordFieldIdx = 0; recordFieldIdx < this.resultOtherAttributes.length; recordFieldIdx++) {
                                         try {
-                                            this.outBuf.put(record);
+                                            //log.debug("the first field is " + record + "---" + record.get(0) + ", and now will set " + (resultOwnAttributes.length + i) + "get" + resultOtherAttributes[i].toLowerCase() + " " + tmpCdrRecord);
+                                            record.put(resultOwnAttributes.length + recordFieldIdx, methodMap.get("get" + resultOtherAttributes[recordFieldIdx].toLowerCase()).invoke(tmpCdrRecord));
                                         } catch (Exception ex) {
                                             log.error(ex, ex);
                                         }
-                                        it.remove();
-
-                                        log.debug(record + " <------> " + tmpCdrRecord);
-
-                                        okNum++;
-                                        break;
                                     }
+                                    tmpBusiRecord.state = 1;
+                                    try {
+                                        this.outBuf.put(record);
+                                    } catch (Exception ex) {
+                                        log.error(ex, ex);
+                                    }
+                                    it.remove();
+                                    //log.debug(record + " <------> " + tmpCdrRecord);
+                                    okNum++;
+                                    break;
                                 }
+                            }
+                            for (arrayIndex = 0; arrayIndex < tmpArray.length; arrayIndex++) {
+                                tmpArray[arrayIndex] = null;
                             }
                         }
                     }
                 }
+                log.info("now do math opteraion use " + (System.currentTimeMillis() - bgMatchTime) + " ms for " + totalMatchNum);
 
                 buffers.clear();
                 num.addAndGet(okNum);
@@ -228,7 +249,7 @@ public class BusiMatchworker implements Runnable {
             LinkedBlockingQueue<BusiRecordNode> buf = this.inbuffer.get(this.clearBufferIndex.get());
             while (!buf.isEmpty()) {
                 BusiRecordNode tmpBusiRecord = buf.poll();
-                if (tmpBusiRecord != null && tmpBusiRecord.state == 0) {
+                if (tmpBusiRecord != null && tmpBusiRecord.state == 0) { 
                     GenericRecord record = new GenericData.Record(resultSchema);
                     for (int i = 0; i < this.resultOwnAttributes.length; i++) {
                         record.put(resultOwnAttributes[i], tmpBusiRecord.genRecord.get(resultOwnAttributes[i]));
@@ -238,15 +259,8 @@ public class BusiMatchworker implements Runnable {
             }
             log.info("after clear the window，the size of output buffer is " + this.outBuf.size());
             buf.clear();
-        } catch (InterruptedException ex) {
-            log.error(ex, ex);
         } catch (Exception ex) {
             log.error(ex, ex);
         }
     }
 }
-//s2 = (Long) tmpCdrRecord.getGenericRecord().get(this.matchFuzzyJoinAttribute);//得到比对成功的数据
-//if (Math.abs(s1 - s2) <= this.maxDeviation) {   //判断是否比对上
-//GenericRecord tmRec = tmpCdrRecord.genRecord;
-//record.put(resultOtherAttributes[i], tmRec.get(resultOtherAttributes[i].toLowerCase()));
-//record.put(resultOwnAttributes.length + i, tmRec.get(resultOtherAttributes[i].toLowerCase()));
