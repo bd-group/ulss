@@ -70,7 +70,7 @@ public class SplitAndGet {
     }
 
     public void count(Message message) {
-        logger.info("check one message for " + MQ);
+//        logger.info("check one message for " + MQ);
         byte[] msg = message.getData();
 
         protocoldocs = Protocol.parse(docsSchemaContent);

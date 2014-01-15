@@ -13,6 +13,8 @@ import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -24,6 +26,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class StartDataRedistributionServer {
 
     static final String CONFIGURATIONFILENAME = "data_redistribution.properties";
+    static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd:HH");
     static Logger logger = null;
 
     static {
@@ -109,6 +112,12 @@ public class StartDataRedistributionServer {
                     }
                 }
 
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException ex) {
+                    //donothing
+                }
+
                 for (String t : topicToConsumer.keySet()) {
                     File fbk = new File(dataDir + "backup/" + t + ".bk");
                     while (true) {
@@ -126,16 +135,16 @@ public class StartDataRedistributionServer {
                         break;
                     }
                 }
-                
-                try {
-                    Thread.sleep(10000);
-                } catch (InterruptedException ex) {
-                    //donothing
-                }
 
+                Date date = new Date();
+                String time = dateFormat.format(date);
                 ConcurrentHashMap<String, AtomicLong> topicToAcceptCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_ACCEPTCOUNT);
                 for (String topic : topicToAcceptCount.keySet()) {
-                    logger.info("accept " + topicToAcceptCount.get(topic) + " messages from the topic " + topic);
+                    logger.info(time + " this hour accept " + topicToAcceptCount.get(topic) + " messages from the topic " + topic);
+                }
+                ConcurrentHashMap<String, AtomicLong> ruleToCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_COUNT);
+                for (String rule : ruleToCount.keySet()) {
+                    logger.info(time + " this hour send " + ruleToCount.get(rule) + " messages for " + rule);
                 }
             }
         });

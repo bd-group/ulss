@@ -860,7 +860,7 @@ public class GetFileFromMetaStore {
                 icli.set_loadstatus_bad(sf.getFid());
                 Date date = new Date();
                 String time = dateFormat2.format(date);
-                logger.info(time + " has set bad the file " + sf);
+                logger.info(time + " has set bad the file for " + topic + " "+ sf);
                 break;
             } catch (Exception ex) {
                 logger.error("can not set bad the file " + sf + " " + ex, ex);

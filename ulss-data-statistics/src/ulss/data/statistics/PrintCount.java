@@ -41,7 +41,7 @@ public class PrintCount implements Runnable {
         File out = new File(dataDir);
         while (true) {
             File f = null;
-            for (int x = 0; x < 1000; x++) {
+            for (int x = 0; x < 500; x++) {
                 try {
                     Thread.sleep(60000 * printtime);
                 } catch (InterruptedException ex) {
@@ -72,10 +72,10 @@ public class PrintCount implements Runnable {
                 String dtime = dateFormat.format(d);
                 int statisticstime = (Integer) RuntimeEnv.getParam(RuntimeEnv.STATISTICS_TIME);
                 try {
-                    bos.write("------------".getBytes());
-                    bos.write(("this is counted in the " + dtime).getBytes());
-                    bos.write("------------".getBytes());
                     synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_COUNT)) {
+                        bos.write("------------".getBytes());
+                        bos.write(("this is counted in the " + dtime).getBytes());
+                        bos.write("------------".getBytes());
                         for (String mq : mqToTime.keySet()) {
                             HashMap<String, AtomicLong[]> timeToCount = MQToCount.get(mq);
                             bos.write('\n');

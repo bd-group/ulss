@@ -83,7 +83,7 @@ public class DetectNodeThread implements Runnable {
                     }
                     r.addNode(node);
                     httpClient.getConnectionManager().shutdown();
-                    logger.info("connect to the node " + url + " for " + r.getTopic() + " " + r.getServiceName() + " successfully!");
+                    logger.info("connect to the node " + url + " for " + r.getTopic() + " " + r.getServiceName() + " " + node.getName() + " successfully!");
                     break;
                 } else {
                     EntityUtils.consume(response.getEntity());
@@ -96,7 +96,7 @@ public class DetectNodeThread implements Runnable {
                     continue;
                 }
             } catch (Exception e) {
-                logger.error("connect to the node " + url + " for " + r.getTopic() + " " + r.getServiceName() + " failed or timeout !" + e, e);
+                logger.error("connect to the node " + url + " for " + r.getTopic() + " " + r.getServiceName() + " " + node.getName() + " failed or timeout !" + e, e);
                 try {
                     Thread.sleep(5000);
                 } catch (InterruptedException ex1) {
@@ -107,7 +107,7 @@ public class DetectNodeThread implements Runnable {
         httpClient.getConnectionManager().shutdown();
 
         ArrayList<RNode> detectNode = (ArrayList<RNode>) RuntimeEnv.getParam(GlobalVariables.DETECT_NODE);
-        
+
         synchronized (GlobalVariables.SYN_DETECT_NODE) {
             detectNode.remove(node);
         }

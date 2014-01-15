@@ -1,5 +1,7 @@
 package ulss.data.statistics;
 
+import cn.ac.iie.ulss.statistics.commons.GlobalVariables;
+import cn.ac.iie.ulss.statistics.commons.RuntimeEnv;
 import com.taobao.metamorphosis.Message;
 import com.taobao.metamorphosis.client.MessageSessionFactory;
 import com.taobao.metamorphosis.client.MetaClientConfig;
@@ -12,6 +14,7 @@ import com.taobao.metamorphosis.utils.ZkUtils;
 import org.apache.log4j.PropertyConfigurator;
 import java.text.SimpleDateFormat;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.log4j.Logger;
@@ -51,6 +54,9 @@ public class DataAccepterThread implements Runnable {
      * 根据表的名字获得对应的消息队列的名字，然后根据消息队列的分区从中拉取数据,然后放入bufferPool中
      */
     public void pullDataFromQ() {
+        Map<String, MessageConsumer> MQToConsumer = (Map<String, MessageConsumer>) RuntimeEnv.getParam(GlobalVariables.MQ_TO_CONSUMER);
+        
+        System.setProperty("notify.remoting.max_read_buffer_size", "10485760");
         MetaClientConfig metaClientConfig = new MetaClientConfig();
         final ZkUtils.ZKConfig zkConfig = new ZkUtils.ZKConfig();
         zkConfig.zkConnect = this.zkUrl;
@@ -68,9 +74,12 @@ public class DataAccepterThread implements Runnable {
 
             SplitAndGet sag = new SplitAndGet(MQ , time , timeToCount);
             
-            consumer.subscribe(MQ, 2 * 1024 * 1024, new MessageListenerImpl(sag));
+            consumer.subscribe(MQ, 10 * 1024 * 1024, new MessageListenerImpl(sag));
 
             consumer.completeSubscribe();
+            
+            MQToConsumer.put(MQ, consumer);
+            
         } catch (MetaClientException ex) {
             logger.error(ex, ex);
         }

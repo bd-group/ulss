@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
@@ -194,7 +193,7 @@ public class GetRuleFromDB {
                     nodelocator = dynamicallocate.getMD5NodeLocator();
 
                     Rule s = new Rule(topic, serviceName, nurl, type, keywords, filters, nodelocator, IPList, nodeToIP, deadIP, partType);
-                    logger.info(new Date() + "this rule is useful" + topic + " " + serviceName + " " + type + " " + keywords + " " + filters);
+                    logger.info(dateFormat.format(new Date()) + " this rule is useful " + topic + " " + serviceName + " " + type + " " + keywords + " " + filters);
 
                     if (topicToRules.containsKey(topic)) {
                         ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(topic);
@@ -211,7 +210,7 @@ public class GetRuleFromDB {
 
                         if (s != null) {
                             transmitrule.add(topic + serviceName);
-                            logger.info(new Date() + "this rule is useful" + topic + " " + serviceName + " " + s.getPartType() + " " + s.getNodeUrls().size());
+                            logger.info(dateFormat.format(new Date()) + " this rule is useful " + topic + " " + serviceName + " " + s.getPartType() + " " + s.getNodeUrls().size());
                             if (topicToRules.containsKey(topic)) {
                                 ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(topic);
                                 set.add(s);

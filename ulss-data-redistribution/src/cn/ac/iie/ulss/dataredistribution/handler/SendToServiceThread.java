@@ -246,7 +246,7 @@ public class SendToServiceThread implements Runnable {
                             al.addAndGet(count);
                             Date date = new Date();
                             String time = dateFormat2.format(date);
-                            logger.info( time + " just send " + count + " messages for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url + " successfully ");
+                            logger.info(time + " just send " + count + " messages for " + topic + " " + rule.getServiceName() + " " + node.getName() + " " + keyinterval + " " + f_id + " to the " + url + " successfully ");
                             EntityUtils.consume(response.getEntity());
                             break;
                         }
@@ -497,7 +497,7 @@ public class SendToServiceThread implements Runnable {
                     icli.set_loadstatus_bad(oldf_id);
                     Date date = new Date();
                     String time = dateFormat2.format(date);
-                    logger.info(time + " has set bad the file " + oldf_id);
+                    logger.info(time + " has set bad the file for " + topic + " " + oldf_id);
                     break;
                 } catch (Exception ex) {
                     logger.error("can not set bad the file " + oldf_id + " " + ex, ex);
@@ -941,7 +941,7 @@ public class SendToServiceThread implements Runnable {
                         }
                         continue;
                     }
-                    logger.info( time + " create file from metastore successfully for " + topic + " " + keyinterval + " " + node.getName());
+                    logger.info(time + " create file from metastore successfully for " + topic + " " + keyinterval + " " + node.getName());
                     String nodeN = sf2.getLocations().get(0).getNode_name();
                     if (nodeN == null) {
                         if (nodeNames.isEmpty()) {
@@ -1122,7 +1122,7 @@ public class SendToServiceThread implements Runnable {
                 icli.set_loadstatus_bad(sf.getFid());
                 Date date = new Date();
                 String time = dateFormat2.format(date);
-                logger.info(time + " has set bad the file " + sf);
+                logger.info(time + " has set bad the file for " + topic + " " + sf);
                 break;
             } catch (Exception ex) {
                 logger.error("can not set bad the file " + sf + " " + ex, ex);

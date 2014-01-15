@@ -30,16 +30,15 @@ public class Server {
         Map<String, String> mqToTime = (Map<String, String>) RuntimeEnv.getParam(GlobalVariables.MQ_TO_TIME);
         String zkUrl = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
         for (String mq : mqToTime.keySet()) {
-            HashMap<String, AtomicLong[]> timeToCount = new HashMap<String, AtomicLong[]>();
-            MQToCount.put(mq, timeToCount);
-            String time = mqToTime.get(mq);
-            DataAccepterThread dat = new DataAccepterThread(zkUrl, mq, time, timeToCount);
-            Thread tdat = new Thread(dat);
-            tdat.start();
+            synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_COUNT)) {
+                logger.info("start statistics for " + mq);
+                HashMap<String, AtomicLong[]> timeToCount = new HashMap<String, AtomicLong[]>();
+                MQToCount.put(mq, timeToCount);
+                String time = mqToTime.get(mq);
+                DataAccepterThread dat = new DataAccepterThread(zkUrl, mq, time, timeToCount);
+                Thread tdat = new Thread(dat);
+                tdat.start();
+            }
         }
-
-        PrintCount pc = new PrintCount();
-        Thread tpc = new Thread(pc);
-        tpc.start();
     }
 }

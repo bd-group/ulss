@@ -78,7 +78,7 @@ public class DataSenderThread implements Runnable {
         topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
         sendThreadPool = topicToSendThreadPool.get(rule.getTopic());
         topicToPackage = (Map<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_PACKAGE);
-//        AtomicLong packagecount = topicToPackage.get(topic);
+        AtomicLong packagecount = topicToPackage.get(topic);
         int timenum = 0;
 
         while (true) {
@@ -87,7 +87,7 @@ public class DataSenderThread implements Runnable {
             String road = "";
             byte[] sendData;
             if (!sendQueue.isEmpty()) {
-//                packagecount.incrementAndGet();
+                packagecount.incrementAndGet();
                 timenum = 0;
                 sendData = pack(sendQueue);
                 if (sendData != null) {
@@ -138,7 +138,7 @@ public class DataSenderThread implements Runnable {
                     t.setName("SendToServiceThread-" + topic + "-" + serviceName + "-" + node.getName() + "-" + keyinterval);
                     t.start();
                 }
-//                packagecount.decrementAndGet();
+                packagecount.decrementAndGet();
             } else {
                 logger.debug("the sendQueue for " + topic + " " + keyinterval + " " + node.getName() + " is empty");
                 if (rule.getType() == 4) {
@@ -187,11 +187,11 @@ public class DataSenderThread implements Runnable {
                 docSet.add(ByteBuffer.wrap(data));
                 count++;
             } else {
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException ex) {
-                    //do nothing
-                }
+//                try {
+//                    Thread.sleep(1);
+//                } catch (InterruptedException ex) {
+//                    //do nothing
+//                }
             }
         }
 
