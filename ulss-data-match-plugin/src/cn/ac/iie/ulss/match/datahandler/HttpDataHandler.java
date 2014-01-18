@@ -5,7 +5,6 @@
 package cn.ac.iie.ulss.match.datahandler;
 
 import cn.ac.iie.ulss.match.worker.BusiMatchworker;
-import cn.ac.iie.ulss.match.worker.CDRUpdater;
 import cn.ac.iie.ulss.match.worker.Matcher;
 import cn.ac.iie.ulss.struct.BusiRecordNode;
 import cn.ac.iie.ulss.struct.CDRRecordNode;
@@ -209,9 +208,6 @@ public class HttpDataHandler extends AbstractHandler {
                         index = worker.httpReceiveBufferIndex.get();
                         if (!tmpBuf.get(index).offer(tmp)) {
                             String sizes = tmpBuf.get(index).remainingCapacity() + " ：";
-//                            for (LinkedBlockingQueue<BusiRecordNode> buf : worker.inbuffer.values()) {
-//                                sizes += buf.remainingCapacity() + " ";
-//                            }
                             for (int idx = 0; idx < worker.inbuffer.size(); idx++) {
                                 sizes += idx + ":" + worker.inbuffer.get(idx).remainingCapacity() + " ";
                             }
@@ -360,7 +356,6 @@ public class HttpDataHandler extends AbstractHandler {
                                 count++;
                                 try {
                                     List<BusiMatchworker> workers = Matcher.schemaInstance2BusiMatchworkers.get(schemaInstance);
-                                    //List<BusiMatchworker> workers = Matcher.schemaInstance2BusiMatchworkers.get(name);
                                     for (BusiMatchworker worker : workers) {
                                         bufferIndex = Math.abs(rdom.nextInt()) % worker.inbuffer.size();
                                         worker.inbuffer.get(bufferIndex).put(brc);

@@ -34,8 +34,18 @@ public class HttpGetDataServer {
     public static void startup() throws Exception {
         log.info("starting match data receive server...");
         server.start();
+        server.setGracefulShutdown(3600000);
         log.info("start match data receive successfully");
-        server.join();
+        //server.join();
+    }
+
+    public static void stop() {
+        log.info("will stop match data receive server ...");
+        try {
+            server.stop();
+        } catch (Exception e) {
+            log.error(e);
+        }
     }
 
     public static void init() throws Exception {

@@ -235,7 +235,7 @@ public class BusiMatchworker implements Runnable {
                 num.addAndGet(okNum);
 
                 log.info("now the match operation is over，begin clear the sliding window buffer for " + this.schemanameInstance);
-                this.simpleClearWindow();
+                //this.simpleClearWindow();
 
                 this.isBegin.set(false);
                 log.info("clear sliding window ok，now for dataflow " + this.schemanameInstance + " match successful num is " + num.get());
@@ -249,7 +249,7 @@ public class BusiMatchworker implements Runnable {
             LinkedBlockingQueue<BusiRecordNode> buf = this.inbuffer.get(this.clearBufferIndex.get());
             while (!buf.isEmpty()) {
                 BusiRecordNode tmpBusiRecord = buf.poll();
-                if (tmpBusiRecord != null && tmpBusiRecord.state == 0) { 
+                if (tmpBusiRecord != null && tmpBusiRecord.state == 0) {
                     GenericRecord record = new GenericData.Record(resultSchema);
                     for (int i = 0; i < this.resultOwnAttributes.length; i++) {
                         record.put(resultOwnAttributes[i], tmpBusiRecord.genRecord.get(resultOwnAttributes[i]));
