@@ -6,7 +6,9 @@ package ulss.data.statistics;
 
 import cn.ac.iie.ulss.statistics.commons.GlobalVariables;
 import cn.ac.iie.ulss.statistics.commons.RuntimeEnv;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.log4j.Logger;
@@ -29,6 +31,7 @@ public class Server {
         HashMap<String, HashMap<String, AtomicLong[]>> MQToCount = (HashMap<String, HashMap<String, AtomicLong[]>>) RuntimeEnv.getParam(GlobalVariables.MQ_TO_COUNT);
         Map<String, String> mqToTime = (Map<String, String>) RuntimeEnv.getParam(GlobalVariables.MQ_TO_TIME);
         String zkUrl = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
+        
         for (String mq : mqToTime.keySet()) {
             synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_COUNT)) {
                 logger.info("start statistics for " + mq);

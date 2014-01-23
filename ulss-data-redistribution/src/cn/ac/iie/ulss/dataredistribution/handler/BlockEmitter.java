@@ -61,7 +61,7 @@ public class BlockEmitter {
     DatumReader<GenericRecord> dxreader = null;
     ConcurrentHashMap<String, AtomicLong> topicToAcceptCount = null;
     AtomicLong acceptCount = null;
-    AtomicLong count = new AtomicLong(0);
+    AtomicLong count = new AtomicLong(1L);
     Map<String, ArrayList<RNode>> topicToNodes = null;
     File fsmit = null;
     ByteArrayInputStream docsin = null;

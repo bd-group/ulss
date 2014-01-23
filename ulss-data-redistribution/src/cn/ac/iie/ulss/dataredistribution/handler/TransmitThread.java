@@ -292,10 +292,11 @@ public class TransmitThread implements Runnable {
             NodeLocator n4 = rule.getNodelocator();
             RNode node = n4.getPrimary(sb.toString());
             ConcurrentHashMap<String, ConcurrentLinkedQueue> chm = (ConcurrentHashMap<String, ConcurrentLinkedQueue>) sendRows.get(node);
+            Long time = 0L;
             String keyinterval = null;
             String keytime = keywords[0].toLowerCase();
             try {
-                Long time = (Long) record.get(keytime);
+                time = (Long) record.get(keytime);
                 String unit = (rule.getPartType().split("\\|"))[3];
                 String interval = (rule.getPartType().split("\\|"))[4];
                 keyinterval = getKeyInterval(time, unit, interval);
@@ -304,17 +305,17 @@ public class TransmitThread implements Runnable {
                 logger.error(e, e);
             }
 
-//            boolean vb = false;
-//            try {
-//                vb = isValid(keyinterval);
-//            } catch (Exception ex) {
-//                logger.error(ex, ex);
-//            }
-//
-//            if (!vb) {
-//                logger.info("the time in the topic " + topic + " is out-of-date!");
-//                return;
-//            }
+            boolean vb = false;
+            try {
+                vb = isValid(keyinterval);
+            } catch (Exception ex) {
+                logger.error(ex, ex);
+            }
+
+            if (!vb) {
+                logger.info("the time in the message for " + topic + " " + rule.getServiceName() + " is wrong because its time is " + time + " and interval is " + keyinterval);
+                return;
+            }
 
             synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
                 ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) chm.get(keyinterval);
@@ -477,13 +478,13 @@ public class TransmitThread implements Runnable {
         Date etime = dateFormat.parse(et);
 
         Calendar ca = Calendar.getInstance();
-        ca.set(5, ca.get(5) - 30);
+        ca.set(6, ca.get(6) - 30);
         Date nowtime = ca.getTime();
         if (nowtime.after(stime)) {
             return false;
         }
 
-        ca.set(5, ca.get(5) + 37);
+        ca.set(6, ca.get(6) + 37);
         nowtime = ca.getTime();
         if (nowtime.before(etime)) {
             return false;
@@ -499,41 +500,44 @@ public class TransmitThread implements Runnable {
         String st = null;
         String et = null;
 
-        Date dtime = new Date();
-        dtime.setTime(time * 1000);
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(time * 1000);
         String keyinterval = null;
 
         if ("'MI'".equalsIgnoreCase(unit)) {   //以分钟为单位
-            dtime.setSeconds(0);
-            dtime.setMinutes(dtime.getMinutes() - (dtime.getMinutes() % Integer.parseInt(interval)));
-            st = dateFormat.format(dtime);
-            int zt = dtime.getMinutes() + Integer.parseInt(interval);
-            if (zt >= 60) {
-                zt = 60;
+            cal.set(14, 0);
+            cal.set(13, 0);
+            cal.set(12, cal.get(12) - cal.get(12) % Integer.parseInt(interval));
+            st = dateFormat.format(cal.getTime());
+            if (cal.get(12) + Integer.parseInt(interval) > 60) {
+                cal.set(12, 60);
+            } else {
+                cal.set(12, cal.get(12) + Integer.parseInt(interval));
             }
-            dtime.setMinutes(zt);
-            et = dateFormat.format(dtime);
+            et = dateFormat.format(cal.getTime());
             keyinterval = st + "|" + et;
         } else if ("'H'".equalsIgnoreCase(unit)) {    //以小时为单位
-            dtime.setSeconds(0);
-            dtime.setMinutes(0);
-            dtime.setHours(dtime.getHours() - (dtime.getHours() % Integer.parseInt(interval)));
-            st = dateFormat.format(dtime);
-            int zt = dtime.getHours() + Integer.parseInt(interval);
-            if (zt >= 24) {
-                zt = 24;
+            cal.set(14, 0);
+            cal.set(13, 0);
+            cal.set(12, 0);
+            cal.set(11, cal.get(11) - cal.get(11) % Integer.parseInt(interval));
+            st = dateFormat.format(cal.getTime());
+            if (cal.get(11) + Integer.parseInt(interval) > 24) {
+                cal.set(11, 24);
+            } else {
+                cal.set(11, cal.get(11) + Integer.parseInt(interval));
             }
-            dtime.setHours(zt);
-            et = dateFormat.format(dtime);
+            et = dateFormat.format(cal.getTime());
             keyinterval = st + "|" + et;
         } else if ("'D'".equalsIgnoreCase(unit)) { //以天为单位
-            dtime.setSeconds(0);
-            dtime.setMinutes(0);
-            dtime.setHours(0);
-            dtime.setDate(dtime.getDate() - (dtime.getDate() % Integer.parseInt(interval)));
-            st = dateFormat.format(dtime);
-            dtime.setDate(dtime.getDate() + Integer.parseInt(interval));
-            et = dateFormat.format(dtime);
+            cal.set(14, 0);
+            cal.set(13, 0);
+            cal.set(12, 0);
+            cal.set(11, 0);
+            cal.set(6, cal.get(6) - cal.get(6) % Integer.parseInt(interval));
+            st = dateFormat.format(cal.getTime());
+            cal.set(6, cal.get(6) + Integer.parseInt(interval));
+            et = dateFormat.format(cal.getTime());
             keyinterval = st + "|" + et;
         } else {
             logger.error("now the partition unit is not support, it only supports --- D day,H hour,MI minute");

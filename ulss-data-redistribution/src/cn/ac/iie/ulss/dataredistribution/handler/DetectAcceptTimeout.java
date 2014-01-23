@@ -71,6 +71,10 @@ public class DetectAcceptTimeout implements Runnable {
                 count = 0L;
             }
 
+            logger.info(topic + " dataPool's size is " + dataPool.size() + " and the packagecount is " + packagecount.get() + " and the activeSendThreadCount's size is " + sendThreadPool.activeCount()
+                    + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
+                    + "MessageTransferStation is " + numOfQueues());
+
             if (emitter.getCount() > 0) {
                 if (emitter.getTime() != time) {
                     time = emitter.getTime();

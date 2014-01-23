@@ -41,7 +41,7 @@ public class PrintCount implements Runnable {
         File out = new File(dataDir);
         while (true) {
             File f = null;
-            for (int x = 0; x < 500; x++) {
+            for (int x = 0; x < 200; x++) {
                 try {
                     Thread.sleep(60000 * printtime);
                 } catch (InterruptedException ex) {

@@ -20,6 +20,7 @@ public class RuntimeEnv {
     public static final String DATA_DIR = "dataDir";
     public static final String PRINT_TIME = "printtime";
     public static final String STATISTICS_TIME = "statisticstime";
+    public static final String GROUP = "group";
     private static Map<String, Object> dynamicParams = new HashMap<String, Object>();
     private static Configuration conf = null;
     static Logger logger = null;
@@ -80,7 +81,14 @@ public class RuntimeEnv {
 
         dynamicParams.put(STATISTICS_TIME, statisticstime);
 
-
+        String group = conf.getString(GROUP, "");
+        if (group.isEmpty()) {
+            logger.error("parameter group does not exist or is not defined");
+            return false;
+        }
+        logger.info("get group " + group);
+        dynamicParams.put(GROUP, group);
+        
         return true;
     }
 
