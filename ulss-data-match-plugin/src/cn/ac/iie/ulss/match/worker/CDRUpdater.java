@@ -165,7 +165,7 @@ public class CDRUpdater implements Runnable {
                             this.isShouldDump.set(false);
                             RecoverPos.dump(this.topMap, Matcher.positionDumpPath, this.region);
                         }
-                        this.simpleClearCDR(updateCount);
+                        //this.simpleClearCDR(updateCount);
                     }
                 }
             }

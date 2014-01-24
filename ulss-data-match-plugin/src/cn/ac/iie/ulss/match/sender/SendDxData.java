@@ -2,7 +2,7 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package cn.ac.iie.ulss.match.sendhanlder;
+package cn.ac.iie.ulss.match.sender;
 
 import cn.ac.iie.ulss.match.worker.Matcher;
 import java.io.ByteArrayOutputStream;
@@ -376,63 +376,7 @@ public class SendDxData implements Runnable {
                 Thread.sleep(10);
             } catch (InterruptedException ex) {
             }
-
-            for (String s : BufferMap.keySet()) {
-                List tmp = listMap.get(s);
-                LinkedBlockingQueue<GenericRecord> buf = BufferMap.get(s);
-                if (buf.isEmpty()) {
-                    currentTime = System.currentTimeMillis();
-                    if ((currentTime - this.sendgabMap.get(s)) >= 5000 && !tmp.isEmpty()) {
-                        try {
-                            log.info("now send data num in total is -> " + s + ":" + Matcher.schemanameInstance2Sendtotal.get(s).addAndGet(tmp.size()));
-                            MQProducer.get(s).sendMessage(this.packData(tmp, s.split("[.]")[1]));
-                            this.sendgabMap.put(s, currentTime);
-                        } catch (Exception ex) {
-                            log.error(ex, ex);
-                        }
-                        tmp.clear();
-                    }
-                } else {
-                    while (!buf.isEmpty()) {
-                        GenericRecord gr = buf.poll();
-                        if (gr != null) {
-                            tmp.add(gr);
-                            count++;
-                        }
-                        if (tmp.size() % batchSize == 0) {
-                            try {
-                                log.info("now send data num in total is -> " + s + ":" + Matcher.schemanameInstance2Sendtotal.get(s).addAndGet(tmp.size()));
-                                currentTime = System.currentTimeMillis();
-                                MQProducer.get(s).sendMessage(this.packData(tmp, s.split("[.]")[1]));
-                                this.sendgabMap.put(s, currentTime);
-                            } catch (Exception ex) {
-                                log.error(ex, ex);
-                            }
-                            tmp.clear();
-                        }
-                    }
-                }
-            }
-
-            while (!this.dxBuf.isEmpty()) {
-                try {
-                    if (isOK) {
-                        dxRecord = this.dxBuf.poll();
-                        if (dxRecord != null) {
-                            if (!(isOK = this.splitRecord(dxRecord))) { //假如放入buffer中不成功，就是buffer的size超过了其容量，那么就要将数据发出去然后重试
-                                log.error("now split one dx record fail,the buffer is full,will clear and send some data then retry split");
-                                failRecord = dxRecord;
-                            }
-                        }
-                    } else {
-                        if (!(isOK = this.splitRecord(failRecord))) { //假如放入buffer中不成功，就是buffer的size超过了其容量，那么就要将数据发出去然后重试
-                            log.error("now retry split one dx record fail,the buffer is full,will clear and send some data then retry split");
-                        }
-                    }
-                } catch (Exception ex) {
-                    log.error(ex, ex);
-                }
-
+            if (this.dxBuf.isEmpty()) {
                 for (String s : BufferMap.keySet()) {
                     List tmp = listMap.get(s);
                     LinkedBlockingQueue<GenericRecord> buf = BufferMap.get(s);
@@ -465,6 +409,63 @@ public class SendDxData implements Runnable {
                                     log.error(ex, ex);
                                 }
                                 tmp.clear();
+                            }
+                        }
+                    }
+                }
+            } else {
+                while (!this.dxBuf.isEmpty()) {
+                    try {
+                        if (isOK) {
+                            dxRecord = this.dxBuf.poll();
+                            if (dxRecord != null) {
+                                if (!(isOK = this.splitRecord(dxRecord))) { //假如放入buffer中不成功，就是buffer的size超过了其容量，那么就要将数据发出去然后重试
+                                    log.error("now split one dx record fail,the buffer is full,will clear and send some data then retry split");
+                                    failRecord = dxRecord;
+                                }
+                            }
+                        } else {
+                            if (!(isOK = this.splitRecord(failRecord))) { //假如放入buffer中不成功，就是buffer的size超过了其容量，那么就要将数据发出去然后重试
+                                log.error("now retry split one dx record fail,the buffer is full,will clear and send some data then retry split");
+                            }
+                        }
+                    } catch (Exception ex) {
+                        log.error(ex, ex);
+                    }
+
+                    for (String s : BufferMap.keySet()) {
+                        List tmp = listMap.get(s);
+                        LinkedBlockingQueue<GenericRecord> buf = BufferMap.get(s);
+                        if (buf.isEmpty()) {
+                            currentTime = System.currentTimeMillis();
+                            if ((currentTime - this.sendgabMap.get(s)) >= 5000 && !tmp.isEmpty()) {
+                                try {
+                                    log.info("now send data num in total is -> " + s + ":" + Matcher.schemanameInstance2Sendtotal.get(s).addAndGet(tmp.size()));
+                                    MQProducer.get(s).sendMessage(this.packData(tmp, s.split("[.]")[1]));
+                                    this.sendgabMap.put(s, currentTime);
+                                } catch (Exception ex) {
+                                    log.error(ex, ex);
+                                }
+                                tmp.clear();
+                            }
+                        } else {
+                            while (!buf.isEmpty()) {
+                                GenericRecord gr = buf.poll();
+                                if (gr != null) {
+                                    tmp.add(gr);
+                                    count++;
+                                }
+                                if (tmp.size() % batchSize == 0) {
+                                    try {
+                                        log.info("now send data num in total is -> " + s + ":" + Matcher.schemanameInstance2Sendtotal.get(s).addAndGet(tmp.size()));
+                                        currentTime = System.currentTimeMillis();
+                                        MQProducer.get(s).sendMessage(this.packData(tmp, s.split("[.]")[1]));
+                                        this.sendgabMap.put(s, currentTime);
+                                    } catch (Exception ex) {
+                                        log.error(ex, ex);
+                                    }
+                                    tmp.clear();
+                                }
                             }
                         }
                     }

@@ -235,7 +235,7 @@ public class BusiMatchworker implements Runnable {
                 num.addAndGet(okNum);
 
                 log.info("now the match operation is over，begin clear the sliding window buffer for " + this.schemanameInstance);
-                //this.simpleClearWindow();
+                this.simpleClearWindow();
 
                 this.isBegin.set(false);
                 log.info("clear sliding window ok，now for dataflow " + this.schemanameInstance + " match successful num is " + num.get());

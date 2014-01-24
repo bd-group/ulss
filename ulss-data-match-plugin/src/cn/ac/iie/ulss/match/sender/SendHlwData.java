@@ -2,7 +2,8 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package cn.ac.iie.ulss.match.sendhanlder;
+package cn.ac.iie.ulss.match.sender;
+
 
 import cn.ac.iie.ulss.match.worker.Matcher;
 import java.io.ByteArrayOutputStream;
