@@ -129,6 +129,7 @@ public class MatchControler implements Runnable {
         newTsmp = System.currentTimeMillis();
         oldTsmp = newTsmp;
         int clearCount = 0;
+        int index;
         while (true) {
             newTsmp = System.currentTimeMillis();
             if (newTsmp - oldTsmp < this.updateInterval) {
@@ -140,7 +141,8 @@ public class MatchControler implements Runnable {
             } else {
                 oldTsmp = newTsmp;
                 //10个窗口，从: 0 开始接收，1 开始清理，9 开始探测
-                this.httpReceiveBufferIndex.set((this.httpReceiveBufferIndex.incrementAndGet()) % this.smalWindowNum);
+                index = this.httpReceiveBufferIndex.get() + 1;
+                this.httpReceiveBufferIndex.set((index) % this.smalWindowNum);
                 this.clearBufferIndex.set((this.httpReceiveBufferIndex.get() + 1) % this.smalWindowNum);
                 this.workBufferIndex.set((this.httpReceiveBufferIndex.get() + this.smalWindowNum - 1) % this.smalWindowNum);
 
