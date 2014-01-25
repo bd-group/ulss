@@ -115,7 +115,7 @@ public class MetastoreWrapper {
         MetaStoreClient cli = null;
         while (!isOver) {
             try {
-                Thread.sleep(2000);
+                Thread.sleep(1000);
             } catch (InterruptedException ex) {
             }
             try {
@@ -126,7 +126,7 @@ public class MetastoreWrapper {
                 erroCount++;
                 log.error("when get the metastore client error:" + ex, ex);
             }
-            if (erroCount >= 4) {
+            if (erroCount >= 2) {
                 return null;
             }
         }

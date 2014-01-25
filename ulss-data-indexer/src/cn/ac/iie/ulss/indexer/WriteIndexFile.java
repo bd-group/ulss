@@ -192,6 +192,10 @@ public class WriteIndexFile implements Runnable {
                 idx2colMap.put(idxName.toLowerCase(), indexCols);
             }
 
+            //特殊处理c_inputtime这个字段
+            FieldType fieldtype = this.getFieldType("true", "true", "long");
+            idx2LuceneFieldTypeMap.put("c_inputtime", fieldtype);
+
             for (Index idx : idxList) {   //下面是生成了idx2fieldMap，生成了索引名与Lucene的域的对应关系
                 if (idx.getIndexHandlerClass().equalsIgnoreCase("lucene")) {
                     Field field;
@@ -315,7 +319,7 @@ public class WriteIndexFile implements Runnable {
                     }
                 }
                 if (innerDataBuf.isEmpty()) {
-                    Thread.sleep(1000);
+                    Thread.sleep(100);
                     continue;
                 }
             } catch (Exception e) {
@@ -339,7 +343,7 @@ public class WriteIndexFile implements Runnable {
                             hashKey = 0;//新版本的文件里只写一个文件
 
                             writer = this.normalLucWriter.getWriterMap().get(hashKey);
-                            log.debug(hashKey + " " + this.normalLucWriter.getWriterMap().keySet());
+                            //log.debug(hashKey + " " + this.normalLucWriter.getWriterMap().keySet());
 
                             try {
                                 for (String idxName : idx2LuceneFieldMap.keySet()) {
@@ -348,6 +352,11 @@ public class WriteIndexFile implements Runnable {
                                     Object o = dxxRecord.get(dataName);
                                     if (o == null) {
                                         log.debug("get null for " + dataName);
+                                        continue;
+                                    }
+                                    if ("c_inputtime".equalsIgnoreCase(dataName)) {
+                                        LongField f = new LongField("c_inputtime", System.currentTimeMillis() / 1000, idx2LuceneFieldTypeMap.get("c_inputtime"));
+                                        doc.add(f);
                                         continue;
                                     }
                                     Field field = idx2LuceneFieldMap.get(idxName);
@@ -542,12 +551,12 @@ public class WriteIndexFile implements Runnable {
                                                 if (dataType.equalsIgnoreCase("array<blob>")) {
                                                     for (int j = 0; j < arrayBytes.size(); j++) {
                                                         bytesdata = (ByteBuffer) arrayBytes.get(j);
-                                                        log.debug("will put " + this.timeLable + "@" + this.getMD5(bytesdata.array()) + " binary data to the lucene file");
+                                                        //log.debug("will put " + this.timeLable + "@" + this.getMD5(bytesdata.array()) + " binary data to the lucene file");
                                                         multiMediaKey = this.timeLable + "@" + this.getMD5(bytesdata.array());
                                                         this.ca.put(multiMediaKey, bytesdata.array());
                                                         field.setStringValue(multiMediaKey);
                                                         doc.add(field);
-                                                        log.debug("put " + this.timeLable + "@" + this.getMD5(bytesdata.array()) + "  " + bytesdata.array().length + " binary data to the lucene file");
+                                                        //log.debug("put " + this.timeLable + "@" + this.getMD5(bytesdata.array()) + "  " + bytesdata.array().length + " binary data to the lucene file");
                                                     }
                                                 } else {
                                                     bytesdata = (ByteBuffer) o;
@@ -555,7 +564,7 @@ public class WriteIndexFile implements Runnable {
                                                     this.ca.put(multiMediaKey, bytesdata.array());
                                                     field.setStringValue(multiMediaKey);
                                                     doc.add(field);
-                                                    log.debug("put " + this.timeLable + "@" + this.getMD5(bytesdata.array()) + "  " + bytesdata.array().length + " binary data to the lucene file");
+                                                    //log.debug("put " + this.timeLable + "@" + this.getMD5(bytesdata.array()) + "  " + bytesdata.array().length + " binary data to the lucene file");
                                                 }
                                             } catch (Exception e) {
                                                 log.error(e, e);
