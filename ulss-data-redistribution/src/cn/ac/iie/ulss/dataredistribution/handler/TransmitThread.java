@@ -59,6 +59,9 @@ public class TransmitThread implements Runnable {
     Protocol protocolMsg = null;
     Map<RNode, Object> sendRows = null;
     Integer sendPoolSize = 0;
+    String timefilter = null;
+    int fstime = 30;
+    int fetime = 37;
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -109,6 +112,9 @@ public class TransmitThread implements Runnable {
 //        docsreader = new GenericDatumReader<GenericRecord>(docsSchema);
         protocolMsg = Protocol.parse(msgSchemaContent);
         sendRows = MessageTransferStation.getMessageTransferStation();
+        timefilter = (String) RuntimeEnv.getParam(RuntimeEnv.TIME_FILTER);
+        fstime = Integer.parseInt(timefilter.split("\\|")[0]);
+        fetime = Integer.parseInt(timefilter.split("\\|")[1]) + fstime;
     }
 
     /**
@@ -362,16 +368,24 @@ public class TransmitThread implements Runnable {
      */
     private boolean isTrue(String s, GenericRecord dxxRecord) {
         if ((!s.contains("|")) && (!s.contains("&"))) {
-            if (!s.contains("=")) {
+            if (!s.contains("=") && !s.contains("!")) {
                 logger.error("the rule's fileter is wrong");
                 return false;
-            } else {
+            } else if (s.contains("=")) {
                 String[] ss = s.split("\\=");
                 String key = (dxxRecord.get(ss[0].toLowerCase())).toString();
                 if (key == null ? ss[1] == null : key.equals(ss[1])) {
                     return true;
                 } else {
                     return false;
+                }
+            } else {
+                String[] ss = s.split("\\!");
+                String key = (dxxRecord.get(ss[0].toLowerCase())).toString();
+                if (key == null ? ss[1] == null : key.equals(ss[1])) {
+                    return false;
+                } else {
+                    return true;
                 }
             }
         } else if (s.contains("|")) {
@@ -416,7 +430,6 @@ public class TransmitThread implements Runnable {
 //            }
 //        }
 //    }
-
     /**
      *
      * place the useless data to the uselessDataStore
@@ -478,13 +491,13 @@ public class TransmitThread implements Runnable {
         Date etime = dateFormat.parse(et);
 
         Calendar ca = Calendar.getInstance();
-        ca.set(6, ca.get(6) - 30);
+        ca.set(6, ca.get(6) - fstime);
         Date nowtime = ca.getTime();
         if (nowtime.after(stime)) {
             return false;
         }
 
-        ca.set(6, ca.get(6) + 37);
+        ca.set(6, ca.get(6) + fetime);
         nowtime = ca.getTime();
         if (nowtime.before(etime)) {
             return false;

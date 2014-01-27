@@ -30,6 +30,8 @@ public class RuntimeEnv {
     public static final String METASTORE_ZK_CLUSTER = "metaStoreZkCluster";
     public static final String REGION = "region";
     public static final String GROUP = "group";
+    public static final String SEND_TIMEOUT = "sendtimeout";
+    public static final String TIME_FILTER = "timefilter";
     private static Map<String, Object> dynamicParams = new HashMap<String, Object>();
     private static Configuration conf = null;
     static Logger logger = null;
@@ -186,7 +188,23 @@ public class RuntimeEnv {
         }
         logger.info("get group " + group);
         dynamicParams.put(GROUP, group);
+        
+        String sendtimeout = conf.getString(SEND_TIMEOUT, "");
+        if (sendtimeout.isEmpty()) {
+            logger.error("parameter sendtimeout does not exist or is not defined");
+            return false;
+        }
+        logger.info("get sendtimeout " + sendtimeout);
+        dynamicParams.put(SEND_TIMEOUT, sendtimeout);
 
+        String timefilter = conf.getString(TIME_FILTER, "");
+        if (timefilter.isEmpty()) {
+            logger.error("parameter timefilter does not exist or is not defined");
+            return false;
+        }
+        logger.info("get timefilter " + timefilter);
+        dynamicParams.put(TIME_FILTER, timefilter);
+        
         return true;
     }
 

@@ -162,7 +162,7 @@ public class SendToServiceThread implements Runnable {
                         logger.info("send " + count + " messages for " + topic + " " + serviceName + " to the " + url + " failed because " + response.getStatusLine());
                         EntityUtils.consume(response.getEntity());
                     }
-                } catch (IOException ex) {
+                } catch (IOException ex) {                 
                     logger.error(ex, ex);
                 }
             }
