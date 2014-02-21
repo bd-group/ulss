@@ -51,6 +51,15 @@ public class SplitAndGet {
     String msgSchemaName = null;
     Protocol protocoldocs = null;
     Protocol protocolMsg = null;
+    ByteArrayInputStream msgbis = null;
+    byte[] msg = null;
+    byte[] onedata = null;
+    BinaryDecoder msgbd = null;
+    GenericRecord dxxRecord = null;
+    Long datatime = -1L;
+    Date dtime = null;
+    String dt = null;
+    AtomicLong[] al = null;
     static Logger logger = null;
 
     static {
@@ -66,19 +75,16 @@ public class SplitAndGet {
         msgSchemaContent = ((Map<String, String>) RuntimeEnv.getParam(GlobalVariables.MQ_TO_SCHEMACONTENT)).get(MQ);
         docsSchemaContent = (String) RuntimeEnv.getParam(GlobalVariables.DOCS_SCHEMA_CONTENT);
         msgSchemaName = ((Map<String, String>) RuntimeEnv.getParam(GlobalVariables.MQ_TO_SCHEMANAME)).get(MQ);
-
+        protocoldocs = Protocol.parse(docsSchemaContent);
+        docsSchema = protocoldocs.getType(GlobalVariables.DOCS);
+        protocolMsg = Protocol.parse(msgSchemaContent);
+        msgSchema = protocolMsg.getType(msgSchemaName);
     }
 
     public void count(Message message) {
 //        logger.info("check one message for " + MQ);
-        byte[] msg = message.getData();
-
-        protocoldocs = Protocol.parse(docsSchemaContent);
-        docsSchema = protocoldocs.getType(GlobalVariables.DOCS);
+        msg = message.getData();
         docsreader = new GenericDatumReader<GenericRecord>(docsSchema);
-
-        protocolMsg = Protocol.parse(msgSchemaContent);
-        msgSchema = protocolMsg.getType(msgSchemaName);
         msgreader = new GenericDatumReader<GenericRecord>(msgSchema);
 
         docsin = new ByteArrayInputStream(msg);
@@ -98,10 +104,10 @@ public class SplitAndGet {
         msgitor = msgSet.iterator();
 
         while (msgitor.hasNext()) {
-            byte[] onedata = ((ByteBuffer) msgitor.next()).array();
-            ByteArrayInputStream msgbis = new ByteArrayInputStream(onedata);
-            BinaryDecoder msgbd = new DecoderFactory().binaryDecoder(msgbis, null);
-            GenericRecord dxxRecord;
+            onedata = ((ByteBuffer) msgitor.next()).array();
+            msgbis = new ByteArrayInputStream(onedata);
+            msgbd = new DecoderFactory().binaryDecoder(msgbis, null);
+
             try {
                 dxxRecord = msgreader.read(null, msgbd);
             } catch (Exception ex) {
@@ -114,7 +120,7 @@ public class SplitAndGet {
                 continue;
             }
 
-            Long datatime = -1L;
+            datatime = -1L;
 
             try {
                 datatime = (Long) dxxRecord.get(time.toLowerCase());
@@ -124,19 +130,19 @@ public class SplitAndGet {
             }
 
             if (datatime != -1L) {
-                Date dtime = new Date();
+                dtime = new Date();
                 dtime.setTime(datatime * 1000);
                 dtime.setMinutes(0);
                 dtime.setSeconds(0);
-                String dt = dateFormat.format(dtime);
+                dt = dateFormat.format(dtime);
 
                 synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_COUNT)) {
                     if (timeToCount.containsKey(dt)) {
-                        AtomicLong[] al = timeToCount.get(dt);
+                        al = timeToCount.get(dt);
                         al[1] = new AtomicLong(1);
                         al[0].incrementAndGet();
                     } else {
-                        AtomicLong[] al = new AtomicLong[2];
+                        al = new AtomicLong[2];
                         al[0] = new AtomicLong(1);
                         al[1] = new AtomicLong(1);
                         timeToCount.put(dt, al);

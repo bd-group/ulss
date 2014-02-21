@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
@@ -62,6 +63,8 @@ public class TransmitThread implements Runnable {
     String timefilter = null;
     int fstime = 30;
     int fetime = 37;
+    int timefilterfile = 0;
+    ConcurrentHashMap<String, AtomicLong> ruleToFilterCount = null;
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -115,6 +118,8 @@ public class TransmitThread implements Runnable {
         timefilter = (String) RuntimeEnv.getParam(RuntimeEnv.TIME_FILTER);
         fstime = Integer.parseInt(timefilter.split("\\|")[0]);
         fetime = Integer.parseInt(timefilter.split("\\|")[1]) + fstime;
+        timefilterfile = (Integer) RuntimeEnv.getParam(RuntimeEnv.TIME_FILTER_FILE);
+        ruleToFilterCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_FILTERCOUNT);
     }
 
     /**
@@ -221,7 +226,7 @@ public class TransmitThread implements Runnable {
      */
     private void sendToType2(Rule rule, byte[] data, GenericRecord record) {
         String f = rule.getFilters();
-        if (isTrue(f, record)) {
+        if (!isTrue(f, record)) {
             while (true) {
                 NodeLocator n = rule.getNodelocator();
                 if (n.getNodesNum() > 0) {
@@ -250,7 +255,7 @@ public class TransmitThread implements Runnable {
     private void sendToType3(Rule rule, byte[] data, GenericRecord record) {
         String[] keywords = (rule.getKeywords()).split("\\;");
         String f = rule.getFilters();
-        if (isTrue(f, record)) {
+        if (!isTrue(f, record)) {
             while (true) {
                 NodeLocator n3 = rule.getNodelocator();
                 if (n3.getNodesNum() > 0) {
@@ -319,7 +324,12 @@ public class TransmitThread implements Runnable {
             }
 
             if (!vb) {
-                logger.info("the time in the message for " + topic + " " + rule.getServiceName() + " is wrong because its time is " + time + " and interval is " + keyinterval);
+                if (timefilterfile == 1) {
+                    storeUnvalidData(rule, data);
+                }
+                AtomicLong al = ruleToFilterCount.get(rule.getTopic()+rule.getServiceName());
+                al.incrementAndGet();
+                logger.debug("the time in the message for " + topic + " " + rule.getServiceName() + " is wrong because its time is " + time + " and interval is " + keyinterval);
                 return;
             }
 
@@ -370,22 +380,38 @@ public class TransmitThread implements Runnable {
         if ((!s.contains("|")) && (!s.contains("&"))) {
             if (!s.contains("=") && !s.contains("!")) {
                 logger.error("the rule's fileter is wrong");
-                return false;
+                return true;
             } else if (s.contains("=")) {
                 String[] ss = s.split("\\=");
                 String key = (dxxRecord.get(ss[0].toLowerCase())).toString();
-                if (key == null ? ss[1] == null : key.equals(ss[1])) {
-                    return true;
+                if (ss.length == 2) {
+                    if (key == null ? ss[1] == null : key.equals(ss[1])) {
+                        return true;
+                    } else {
+                        return false;
+                    }
                 } else {
-                    return false;
+                    if (key == null || key.equals("")) {
+                        return true;
+                    } else {
+                        return false;
+                    }
                 }
             } else {
                 String[] ss = s.split("\\!");
                 String key = (dxxRecord.get(ss[0].toLowerCase())).toString();
-                if (key == null ? ss[1] == null : key.equals(ss[1])) {
-                    return false;
+                if (ss.length == 2) {
+                    if (key == null ? ss[1] == null : key.equals(ss[1])) {
+                        return false;
+                    } else {
+                        return true;
+                    }
                 } else {
-                    return true;
+                    if (key == null || key.equals("")) {
+                        return false;
+                    } else {
+                        return true;
+                    }
                 }
             }
         } else if (s.contains("|")) {
@@ -405,7 +431,7 @@ public class TransmitThread implements Runnable {
             }
             return true;
         }
-        return false;
+        return true;
     }
 
 //    /**

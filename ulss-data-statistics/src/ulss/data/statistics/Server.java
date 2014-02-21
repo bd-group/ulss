@@ -6,9 +6,7 @@ package ulss.data.statistics;
 
 import cn.ac.iie.ulss.statistics.commons.GlobalVariables;
 import cn.ac.iie.ulss.statistics.commons.RuntimeEnv;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.log4j.Logger;

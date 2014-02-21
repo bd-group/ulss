@@ -48,8 +48,12 @@ public class DataSenderThread implements Runnable {
     int datasenderLimitTime = 0;
     int sendThreadPoolSize = 0;
     Map<String, AtomicLong> topicToPackage = null;
+    Map<String, ConcurrentLinkedQueue> topicToDataPool = null;
+    ConcurrentLinkedQueue datapool = null;
     Rule rule = null;
     int count = 0;
+    long stime = 0L;
+    long packagetimelimit = 0L;
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -78,6 +82,9 @@ public class DataSenderThread implements Runnable {
         topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
         sendThreadPool = topicToSendThreadPool.get(rule.getTopic());
         topicToPackage = (Map<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_PACKAGE);
+        packagetimelimit = (Integer) RuntimeEnv.getParam(RuntimeEnv.PACKAGE_TIMELIMIT) * 1000 ;
+        topicToDataPool = (Map<String, ConcurrentLinkedQueue>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_DATAPOOL);
+        datapool = topicToDataPool.get(topic);
         AtomicLong packagecount = topicToPackage.get(topic);
         int timenum = 0;
 
@@ -165,7 +172,7 @@ public class DataSenderThread implements Runnable {
                 }
             }
         }
-        logger.info("the ConcurrentLinkedQueue for for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " is removed");
+        logger.info("the ConcurrentLinkedQueue for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " is removed");
     }
 
     /**
@@ -179,19 +186,23 @@ public class DataSenderThread implements Runnable {
         docsRecord.put(GlobalVariables.DOC_SCHEMA_NAME, msgSchemaName);
         GenericArray docSet = new GenericData.Array<GenericRecord>((sendPoolSize), docs.getField(GlobalVariables.DOC_SET).schema());
         count = 0;
-        int count2 = 0;
-        while (count2 < sendPoolSize) {
-            count2++;
+        stime = System.currentTimeMillis();
+        while (count < sendPoolSize) {
             byte[] data = (byte[]) clq.poll();
             if (data != null) {
                 docSet.add(ByteBuffer.wrap(data));
                 count++;
             } else {
-//                try {
-//                    Thread.sleep(1);
-//                } catch (InterruptedException ex) {
-//                    //do nothing
-//                }
+                if(datapool.isEmpty()){
+                    break;
+                }else if( (System.currentTimeMillis() - stime) >= packagetimelimit){
+                    break;
+                }
+                try {
+                    Thread.sleep(5);
+                } catch (InterruptedException ex) {
+                    //
+                }
             }
         }
 

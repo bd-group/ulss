@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
 import org.apache.log4j.Logger;
 
 /**
@@ -74,7 +75,7 @@ public class DataAccepterThread implements Runnable {
 
             SplitAndGet sag = new SplitAndGet(MQ , time , timeToCount);
             
-            consumer.subscribe(MQ, 10 * 1024 * 1024, new MessageListenerImpl(sag));
+            consumer.subscribe(MQ, 2 * 1024 * 1024, new MessageListenerImpl(sag));
 
             consumer.completeSubscribe();
             
@@ -101,6 +102,11 @@ public class DataAccepterThread implements Runnable {
         public void recieveMessages(Message msg) {
             if (msg != null) {
                 sag.count(msg);
+            }
+            try {
+                Thread.sleep(5);
+            } catch (InterruptedException ex) {
+                //logger.error(ex,ex);
             }
         }
 

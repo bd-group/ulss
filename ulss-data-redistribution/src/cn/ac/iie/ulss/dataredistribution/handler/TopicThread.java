@@ -53,6 +53,7 @@ public class TopicThread implements Runnable {
     String fileName = null;
     File fsmit = null;
     String dataDir = (String) RuntimeEnv.getParam(RuntimeEnv.DATA_DIR);
+    Map<String, ConcurrentLinkedQueue> topicToDataPool = (Map<String, ConcurrentLinkedQueue>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_DATAPOOL);
     static Logger logger = null;
 
     static {
@@ -73,8 +74,8 @@ public class TopicThread implements Runnable {
         if (ruleSet.isEmpty()) {
             logger.info("the topic " + topic + "has no services need data");
         } else {
-            dataPool = new ConcurrentLinkedQueue();
-
+            dataPool = topicToDataPool.get(topic);
+            
             fileName = dataDir + "backup/" + topic + ".bk";
             fsmit = new File(fileName);
             if (fsmit.exists()) {

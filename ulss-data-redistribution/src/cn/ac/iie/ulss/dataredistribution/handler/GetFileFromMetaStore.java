@@ -170,10 +170,10 @@ public class GetFileFromMetaStore {
                     }
                 }
 
-                if (!zk.exists("/ulss/redistribution/" + topic + keyinterval + "lock")) {
+                if (!zk.exists("/ulss/redistribution/" + topic + node.getName() + "lock")) {
                     try {
-                        zk.createEphemeral("/ulss/redistribution/" + topic + keyinterval + "lock", topic + keyinterval + node.getName());
-                        logger.info("new lock " + topic + keyinterval + "lock" + " is created");
+                        zk.createEphemeral("/ulss/redistribution/" + topic + node.getName() + "lock", topic + node.getName());
+                        logger.info("new lock " + topic + node.getName() + "lock" + " is created");
                     } catch (Exception e) {
                         try {
                             Thread.sleep(2000);
@@ -536,7 +536,7 @@ public class GetFileFromMetaStore {
                             if (aomlsf.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
                                 Date date = new Date();
                                 String time = dateFormat2.format(date);
-                                logger.info( time + " the file for " + topic + " " + keyinterval + " " + node.getName() + " has been reopened " + aomlsf);
+                                logger.info(time + " the file for " + topic + " " + keyinterval + " " + node.getName() + " has been reopened " + aomlsf);
 
                                 int visit = -1;
                                 if (aomlsf.getLocations() == null) {
@@ -679,7 +679,7 @@ public class GetFileFromMetaStore {
                         }
                         continue;
                     }
-                    logger.info( time + " create file from metastore successfully for " + topic + " " + keyinterval + " " + node.getName());
+                    logger.info(time + " create file from metastore successfully for " + topic + " " + keyinterval + " " + node.getName());
                     String nodeN = sf2.getLocations().get(0).getNode_name();
                     if (nodeN == null) {
                         if (nodeNames.isEmpty()) {
@@ -816,7 +816,7 @@ public class GetFileFromMetaStore {
 
                                 continue;
                             } else {
-                                logger.info( time + " this file " + f_id + " " + topic + " " + keyinterval + " " + node.getName() + " " + road + " " + sendIP + " has been set online");
+                                logger.info(time + " this file " + f_id + " " + topic + " " + keyinterval + " " + node.getName() + " " + road + " " + sendIP + " has been set online");
                                 ob[0] = sendIP;
                                 ob[1] = f_id;
                                 ob[2] = road;
@@ -860,7 +860,7 @@ public class GetFileFromMetaStore {
                 icli.set_loadstatus_bad(sf.getFid());
                 Date date = new Date();
                 String time = dateFormat2.format(date);
-                logger.info(time + " has set bad the file for " + topic + " "+ sf);
+                logger.info(time + " has set bad the file for " + topic + " " + sf);
                 break;
             } catch (Exception ex) {
                 logger.error("can not set bad the file " + sf + " " + ex, ex);

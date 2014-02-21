@@ -179,29 +179,33 @@ public class GetRuleFromDB {
                 String partType = null;
 
                 if (type == 0 || type == 1 || type == 2 || type == 3) {
-                    transmitrule.add(topic + serviceName);
-                    IPList = nodeUrls.split("\\;");
-                    ArrayList nurl = new ArrayList<RNode>();
-                    for (int i = 0; i < IPList.length; i++) {
-                        RNode node = new RNode(IPList[i]);
-                        node.setType(type);
-                        nurl.add(node);
-                        nodeToIP.put(node, node.getName());
-                    }
-                    DynamicAllocate dynamicallocate = new DynamicAllocate();
-                    dynamicallocate.setNodes(nurl);
-                    nodelocator = dynamicallocate.getMD5NodeLocator();
+                    if (regions.contains(region)) {
+                        transmitrule.add(topic + serviceName);
+                        IPList = nodeUrls.split("\\;");
+                        ArrayList nurl = new ArrayList<RNode>();
+                        for (int i = 0; i < IPList.length; i++) {
+                            RNode node = new RNode(IPList[i]);
+                            node.setType(type);
+                            nurl.add(node);
+                            nodeToIP.put(node, node.getName());
+                        }
+                        DynamicAllocate dynamicallocate = new DynamicAllocate();
+                        dynamicallocate.setNodes(nurl);
+                        nodelocator = dynamicallocate.getMD5NodeLocator();
 
-                    Rule s = new Rule(topic, serviceName, nurl, type, keywords, filters, nodelocator, IPList, nodeToIP, deadIP, partType);
-                    logger.info(dateFormat.format(new Date()) + " this rule is useful " + topic + " " + serviceName + " " + type + " " + keywords + " " + filters);
+                        Rule s = new Rule(topic, serviceName, nurl, type, keywords, filters, nodelocator, IPList, nodeToIP, deadIP, partType);
+                        logger.info(dateFormat.format(new Date()) + " this rule is useful " + topic + " " + serviceName + " " + type + " " + keywords + " " + filters);
 
-                    if (topicToRules.containsKey(topic)) {
-                        ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(topic);
-                        set.add(s);
-                    } else {
-                        ArrayList<Rule> set = new ArrayList<Rule>();
-                        set.add(s);
-                        topicToRules.put(topic, set);
+                        if (topicToRules.containsKey(topic)) {
+                            ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(topic);
+                            set.add(s);
+                        } else {
+                            ArrayList<Rule> set = new ArrayList<Rule>();
+                            set.add(s);
+                            topicToRules.put(topic, set);
+                        }
+                    }else{
+                        logger.info("this rule's region will be not in the regions " + region);
                     }
                 } else if (type == 4) {
                     if (regions.contains(region)) {

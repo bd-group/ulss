@@ -37,6 +37,7 @@ public class GlobalVariables {
     public static final String SYN_DETECT_NODE = "synDetectNode";
     public static final String TOPIC_TO_ACCEPTCOUNT = "topicToAcceptCount";
     public static final String RULE_TO_COUNT = "ruleToCount";
+    public static final String RULE_TO_FILTERCOUNT = "ruleToFilterCount";
     public static final String METASTORE_CLIENT_POOL = "metaStoreClientPool";
     public static final String TOPIC_TO_RULES = "topicToRules";
     public static final String VALUE_TO_FILE = "valueToFile";
@@ -64,6 +65,7 @@ public class GlobalVariables {
     public static final String TOPIC_TO_NODES = "topicToNodes";
     public static final String TOPIC_TO_CONSUMER = "topicToConsumer";
     public static final String TOPIC_TO_PACKAGE = "topicToPackage";
+    public static final String TOPIC_TO_DATAPOOL = "topicToDataPool";
     static Logger logger = null;
 
     static {
@@ -112,6 +114,10 @@ public class GlobalVariables {
         logger.info("setting the ruleToCount to the Global Variables");
         ConcurrentHashMap<String, AtomicLong> ruleToCount = new ConcurrentHashMap<String, AtomicLong>();
         RuntimeEnv.addParam(RULE_TO_COUNT, ruleToCount);
+        
+        logger.info("setting the ruleToFilterCount to the Global Variables");
+        ConcurrentHashMap<String, AtomicLong> ruleToFilterCount = new ConcurrentHashMap<String, AtomicLong>();
+        RuntimeEnv.addParam(RULE_TO_FILTERCOUNT, ruleToFilterCount);
 
         logger.info("setting the MetaStoreClientPool to the Global Variables");
         MetaStoreClientPool mscp = null;
@@ -180,6 +186,10 @@ public class GlobalVariables {
         logger.info("setting the topicToPackage to the Global Variables");
         Map<String, AtomicLong> topicToPackage = new HashMap<String, AtomicLong>();
         RuntimeEnv.addParam(TOPIC_TO_PACKAGE, topicToPackage);
+        
+        logger.info("setting the topicToDataPool to the Global Variables");
+        Map<String, ConcurrentLinkedQueue> topicToDataPool = new HashMap<String, ConcurrentLinkedQueue>();
+        RuntimeEnv.addParam(TOPIC_TO_DATAPOOL, topicToDataPool);
 
         logger.info("setting the detectNodeList and detectNode to the Global Variables");
         ConcurrentLinkedQueue<Object[]> detectNodeList = new ConcurrentLinkedQueue<Object[]>();

@@ -23,25 +23,25 @@ import org.apache.log4j.Logger;
  * @author evan yang
  */
 public class DataAccepterThread implements Runnable {
-    
+
     public static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     String zkUrl = null;
     String topic = null;
     ConcurrentLinkedQueue dataPool = null;
     Map<String, MessageConsumer> topicToConsumer = null;
     static Logger logger = null;
-    
+
     static {
         PropertyConfigurator.configure("log4j.properties");
         logger = org.apache.log4j.Logger.getLogger(DataAccepterThread.class.getName());
     }
-    
+
     public DataAccepterThread(String zkUrl, String topic, ConcurrentLinkedQueue dataPool) {
         this.zkUrl = zkUrl;
         this.topic = topic;
         this.dataPool = dataPool;
     }
-    
+
     @Override
     public void run() {
         topicToConsumer = (Map<String, MessageConsumer>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_CONSUMER);
@@ -55,11 +55,11 @@ public class DataAccepterThread implements Runnable {
     public void pullDataFromQ() {
         BlockEmitter emitter = new BlockEmitter(dataPool, topic);
         emitter.init();
-        DetectAcceptTimeout dat = new DetectAcceptTimeout(emitter , topic ,dataPool);
+        DetectAcceptTimeout dat = new DetectAcceptTimeout(emitter, topic, dataPool);
         Thread tdat = new Thread(dat);
         tdat.setName("DetectAcceptTimeout-" + topic);
         tdat.start();
-        
+
         System.setProperty("notify.remoting.max_read_buffer_size", "10485760");
         MetaClientConfig metaClientConfig = new MetaClientConfig();
         final ZkUtils.ZKConfig zkConfig = new ZkUtils.ZKConfig();
@@ -68,17 +68,17 @@ public class DataAccepterThread implements Runnable {
         final MessageSessionFactory sessionFactory;
         try {
             sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
-            
+
             ConsumerConfig cc = new ConsumerConfig("rd_" + topic + "_consumer");
-            
+
             final MessageConsumer consumer = sessionFactory.createConsumer(cc);
-            
+
             logger.info("init the consumer ok,begin receive data from the topic " + this.topic);
-            
+
             consumer.subscribe(topic, 10 * 1024 * 1024, new MessageListenerImpl(emitter));
-            
+
             consumer.completeSubscribe();
-            
+
             topicToConsumer.put(topic, consumer);
         } catch (MetaClientException ex) {
             logger.error(ex, ex);
@@ -90,13 +90,13 @@ public class DataAccepterThread implements Runnable {
      * the messageListener use control the flow
      */
     private class MessageListenerImpl implements MessageListener {
-        
+
         BlockEmitter be = null;
-        
+
         public MessageListenerImpl(BlockEmitter be) {
             this.be = be;
         }
-        
+
         @Override
         public void recieveMessages(Message msg) {
             if (msg != null) {
@@ -108,10 +108,10 @@ public class DataAccepterThread implements Runnable {
 //                        //do nothing
 //                    }
 //                }
-                be.emit(msg, "data" , System.currentTimeMillis());
+                be.emit(msg, "data", System.currentTimeMillis());
             }
         }
-        
+
         @Override
         public Executor getExecutor() {
             return null;

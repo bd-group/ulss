@@ -32,6 +32,8 @@ public class RuntimeEnv {
     public static final String GROUP = "group";
     public static final String SEND_TIMEOUT = "sendtimeout";
     public static final String TIME_FILTER = "timefilter";
+    public static final String PACKAGE_TIMELIMIT = "packagetimelimit";
+    public static final String TIME_FILTER_FILE = "timefilterfile";
     private static Map<String, Object> dynamicParams = new HashMap<String, Object>();
     private static Configuration conf = null;
     static Logger logger = null;
@@ -189,9 +191,9 @@ public class RuntimeEnv {
         logger.info("get group " + group);
         dynamicParams.put(GROUP, group);
         
-        String sendtimeout = conf.getString(SEND_TIMEOUT, "");
-        if (sendtimeout.isEmpty()) {
-            logger.error("parameter sendtimeout does not exist or is not defined");
+        int sendtimeout = conf.getInt(SEND_TIMEOUT, 60);
+        if (sendtimeout <= 0) {
+            logger.error("parameter sendtimeout is a wrong number");
             return false;
         }
         logger.info("get sendtimeout " + sendtimeout);
@@ -204,6 +206,22 @@ public class RuntimeEnv {
         }
         logger.info("get timefilter " + timefilter);
         dynamicParams.put(TIME_FILTER, timefilter);
+        
+        int packagetimelimit = conf.getInt(PACKAGE_TIMELIMIT, 5);
+        if (packagetimelimit <= 0) {
+            logger.error("parameter packagetimelimit is a wrong number");
+            return false;
+        }
+        logger.info("get packagetimelimit " + packagetimelimit);
+        dynamicParams.put(PACKAGE_TIMELIMIT, packagetimelimit);
+        
+        int timefilterfile = conf.getInt(TIME_FILTER_FILE, 0);
+        if (timefilterfile < 0) {
+            logger.error("parameter timefilterfile is a wrong number");
+            return false;
+        }
+        logger.info("get timefilterfile " + timefilterfile);
+        dynamicParams.put(TIME_FILTER_FILE, timefilterfile);
         
         return true;
     }

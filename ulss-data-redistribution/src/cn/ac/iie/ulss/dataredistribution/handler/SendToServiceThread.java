@@ -114,15 +114,16 @@ public class SendToServiceThread implements Runnable {
         HttpResponse response = null;
         int i;
         for (i = 0; i < 3; i++) {
-            httppost = new HttpPost(url);
-            httppost.setHeader("cmd", "data");
-            InputStreamEntity reqEntity = new InputStreamEntity(new ByteArrayInputStream(sendData), -1);
-            reqEntity.setContentType("binary/octet-stream");
-            reqEntity.setChunked(true);
-            httppost.setEntity(reqEntity);
             int flag = 0;
             while (true) {
                 try {
+                    httppost = new HttpPost(url);
+                    httppost.setHeader("cmd", "data");
+                    InputStreamEntity reqEntity = new InputStreamEntity(new ByteArrayInputStream(sendData), -1);
+                    reqEntity.setContentType("binary/octet-stream");
+                    reqEntity.setChunked(true);
+                    httppost.setEntity(reqEntity);
+                    logger.info("begin to send " + count + " messages for " + topic + " " + serviceName + " " + node.getName() + " to the " + url );
                     response = httpClient.execute(httppost);
                     break;
                 } catch (ConnectionPoolTimeoutException ex) {
@@ -162,13 +163,14 @@ public class SendToServiceThread implements Runnable {
                         logger.info("send " + count + " messages for " + topic + " " + serviceName + " to the " + url + " failed because " + response.getStatusLine());
                         EntityUtils.consume(response.getEntity());
                     }
-                } catch (IOException ex) {                 
+                } catch (IOException ex) {
                     logger.error(ex, ex);
                 }
             }
         }
 
         if (i >= 3) {
+            logger.info("some messages have not been sent!");
             if (rule.getNodeUrls().contains(node)) {
                 Object[] o = new Object[3];
                 o[0] = node;
@@ -200,15 +202,16 @@ public class SendToServiceThread implements Runnable {
         int flag = 0;
 
         for (i = 0; i < 3; i++) {
-            httppost = new HttpPost(url);
-            httppost.setHeader("cmd", f_id + "|" + road);
-            InputStreamEntity reqEntity = new InputStreamEntity(new ByteArrayInputStream(sendData), -1);
-            reqEntity.setContentType("binary/octet-stream");
-            reqEntity.setChunked(true);
-            httppost.setEntity(reqEntity);
             int flag2 = 0;
             while (true) {
                 try {
+                    httppost = new HttpPost(url);
+                    httppost.setHeader("cmd", f_id + "|" + road);
+                    InputStreamEntity reqEntity = new InputStreamEntity(new ByteArrayInputStream(sendData), -1);
+                    reqEntity.setContentType("binary/octet-stream");
+                    reqEntity.setChunked(true);
+                    httppost.setEntity(reqEntity);
+                    logger.info("begin to send " + count + " messages for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url);
                     response = httpClient.execute(httppost);
                     break;
                 } catch (ConnectionPoolTimeoutException ex) {
@@ -272,6 +275,7 @@ public class SendToServiceThread implements Runnable {
      * change file to send
      */
     private void changeFileTosend(int flag) {
+        logger.info("some messages have not been sent!");
         ConcurrentHashMap<String, Object[]> valueToFile = (ConcurrentHashMap<String, Object[]>) RuntimeEnv.getParam(GlobalVariables.VALUE_TO_FILE);
 
         synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_VALUE_TO_FILE)) {
@@ -391,10 +395,10 @@ public class SendToServiceThread implements Runnable {
                             }
                         }
 
-                        if (!zk.exists("/ulss/redistribution/" + topic + keyinterval + "lock")) {
+                        if (!zk.exists("/ulss/redistribution/" + topic + node.getName() + "lock")) {
                             try {
-                                zk.createEphemeral("/ulss/redistribution/" + topic + keyinterval + "lock", topic + keyinterval + node.getName());
-                                logger.info("new lock " + topic + keyinterval + "lock" + " is created");
+                                zk.createEphemeral("/ulss/redistribution/" + topic + node.getName() + "lock", topic + node.getName());
+                                logger.info("new lock " + topic + node.getName() + "lock" + " is created");
                             } catch (Exception e) {
                                 try {
                                     Thread.sleep(2000);

@@ -35,6 +35,8 @@ public class MessageTransferStation {
     static Map<String, ArrayList<RNode>> topicToNodes = (Map<String, ArrayList<RNode>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_NODES);
     static Map<String, AtomicLong> topicToPackage = (Map<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_PACKAGE);
     static ConcurrentHashMap<String, AtomicLong> ruleToCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_COUNT);
+    static ConcurrentHashMap<String, AtomicLong> ruleToFilterCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_FILTERCOUNT);
+    static Map<String, ConcurrentLinkedQueue> topicToDataPool = (Map<String, ConcurrentLinkedQueue>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_DATAPOOL);
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -55,7 +57,10 @@ public class MessageTransferStation {
         topicToHttpclient = (Map<String, HttpClient>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_HTTPCLIENT);
         for (Iterator it = topicset.iterator(); it.hasNext();) {
             topickey = (String) it.next();
-
+            
+            ConcurrentLinkedQueue dataPool = new ConcurrentLinkedQueue();
+            topicToDataPool.put(topickey, dataPool);
+            
             AtomicLong pac = new AtomicLong(0);
             topicToPackage.put(topickey, pac);
                     
@@ -74,6 +79,8 @@ public class MessageTransferStation {
             for (Rule rule : ruleSet) {
                 AtomicLong rulecount = new AtomicLong(0);
                 ruleToCount.put(rule.getTopic() + rule.getServiceName(), rulecount);
+                AtomicLong filterCount = new AtomicLong(0);
+                ruleToFilterCount.put(rule.getTopic() + rule.getServiceName(), filterCount);
                 
                 if (rule.getType() == 0 || rule.getType() == 1 || rule.getType() == 2 || rule.getType() == 3 || rule.getType() == 100) {
                     ArrayList nodeurls = rule.getNodeUrls();

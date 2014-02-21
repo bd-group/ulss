@@ -197,7 +197,7 @@ public class TransmitStrandedDataThread implements Runnable {
      */
     private void sendToType2(Rule rule, byte[] data, GenericRecord record) {
         String f = rule.getFilters();
-        if (isTrue(f, record)) {
+        if (!isTrue(f, record)) {
             while (true) {
                 NodeLocator n = rule.getNodelocator();
                 if (n.getNodesNum() > 0) {
@@ -226,7 +226,7 @@ public class TransmitStrandedDataThread implements Runnable {
     private void sendToType3(Rule rule, byte[] data, GenericRecord record) {
         String[] keywords = (rule.getKeywords()).split("\\;");
         String f = rule.getFilters();
-        if (isTrue(f, record)) {
+        if (!isTrue(f, record)) {
             while (true) {
                 NodeLocator n3 = rule.getNodelocator();
                 if (n3.getNodesNum() > 0) {
@@ -275,16 +275,40 @@ public class TransmitStrandedDataThread implements Runnable {
      */
     private boolean isTrue(String s, GenericRecord dxxRecord) {
         if ((!s.contains("|")) && (!s.contains("&"))) {
-            if (!s.contains("=")) {
+            if (!s.contains("=") && !s.contains("!")) {
                 logger.error("the rule's fileter is wrong");
-                return false;
-            } else {
+                return true;
+            } else if (s.contains("=")) {
                 String[] ss = s.split("\\=");
-                String key = (dxxRecord.get(ss[0])).toString();
-                if (key == null ? ss[1] == null : key.equals(ss[1])) {
-                    return true;
+                String key = (dxxRecord.get(ss[0].toLowerCase())).toString();
+                if (ss.length == 2) {
+                    if (key == null ? ss[1] == null : key.equals(ss[1])) {
+                        return true;
+                    } else {
+                        return false;
+                    }
                 } else {
-                    return false;
+                    if (key == null || key.equals("")) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
+            } else {
+                String[] ss = s.split("\\!");
+                String key = (dxxRecord.get(ss[0].toLowerCase())).toString();
+                if (ss.length == 2) {
+                    if (key == null ? ss[1] == null : key.equals(ss[1])) {
+                        return false;
+                    } else {
+                        return true;
+                    }
+                } else {
+                    if (key == null || key.equals("")) {
+                        return false;
+                    } else {
+                        return true;
+                    }
                 }
             }
         } else if (s.contains("|")) {
@@ -304,7 +328,7 @@ public class TransmitStrandedDataThread implements Runnable {
             }
             return true;
         }
-        return false;
+        return true;
     }
 
 //    /**
