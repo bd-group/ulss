@@ -7,8 +7,10 @@ package cn.ac.iie.ulss.dataredistribution.tools;
 import cn.ac.iie.ulss.dataredistribution.commons.GlobalVariables;
 import cn.ac.iie.ulss.dataredistribution.commons.RuntimeEnv;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
+import cn.ac.iie.ulss.dataredistribution.handler.CreateFileThread;
 import cn.ac.iie.ulss.dataredistribution.handler.DataSenderThread;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -37,6 +39,7 @@ public class MessageTransferStation {
     static ConcurrentHashMap<String, AtomicLong> ruleToCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_COUNT);
     static ConcurrentHashMap<String, AtomicLong> ruleToFilterCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_FILTERCOUNT);
     static Map<String, ConcurrentLinkedQueue> topicToDataPool = (Map<String, ConcurrentLinkedQueue>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_DATAPOOL);
+    static Map<String, Map<String, AtomicLong>> ruleToThreadPoolSize = (Map<String, Map<String, AtomicLong>>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_THREADPOOLSIZE);
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -73,6 +76,9 @@ public class MessageTransferStation {
             ArrayList<RNode> alr = new ArrayList<RNode>();
             topicToNodes.put(topickey, alr);
 
+            Map<String, AtomicLong> topicToThreadSize = new HashMap<String, AtomicLong>();
+            ruleToThreadPoolSize.put(topickey, topicToThreadSize);
+            
             ThreadGroup sendThreadPool = new ThreadGroup(topickey);
             topicToSendThreadPool.put(topickey, sendThreadPool);
             ruleSet = (((ConcurrentHashMap<String, ArrayList<Rule>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_RULES)).get(topickey));
@@ -81,6 +87,8 @@ public class MessageTransferStation {
                 ruleToCount.put(rule.getTopic() + rule.getServiceName(), rulecount);
                 AtomicLong filterCount = new AtomicLong(0);
                 ruleToFilterCount.put(rule.getTopic() + rule.getServiceName(), filterCount);
+                AtomicLong threadSize = new AtomicLong(0);
+                topicToThreadSize.put(rule.getServiceName(), threadSize);
                 
                 if (rule.getType() == 0 || rule.getType() == 1 || rule.getType() == 2 || rule.getType() == 3 || rule.getType() == 100) {
                     ArrayList nodeurls = rule.getNodeUrls();
@@ -112,6 +120,12 @@ public class MessageTransferStation {
                             messageTransferStation.put(node, chm);
                         }
                     }
+                    
+                    CreateFileThread cft = new CreateFileThread(rule);
+                    Thread tcft = new Thread(cft);
+                    tcft.setName("CreateFileThread-" + rule.getTopic() + rule.getServiceName());
+                    tcft.start();
+                    
                 }
             }
         }
@@ -154,6 +168,11 @@ public class MessageTransferStation {
                         messageTransferStation.put(node, chm);
                     }
                 }
+                
+                CreateFileThread cft = new CreateFileThread(rule);
+                Thread tcft = new Thread(cft);
+                tcft.setName("CreateFileThread-" + rule.getTopic() + rule.getServiceName());
+                tcft.start();
             }
         }
     }

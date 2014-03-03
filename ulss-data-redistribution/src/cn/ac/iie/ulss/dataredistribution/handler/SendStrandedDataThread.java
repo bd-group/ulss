@@ -10,6 +10,7 @@ import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
 import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.log4j.PropertyConfigurator;
 
 /**
@@ -23,7 +24,7 @@ public class SendStrandedDataThread implements Runnable {
     ThreadGroup sendThreadPool = null;
     static org.apache.log4j.Logger logger = null;
     int sendThreadPoolSize = (Integer) RuntimeEnv.getParam(RuntimeEnv.SEND_THREAD_POOL_SIZE);
-
+    Map<String, Map<String, AtomicLong>> ruleToThreadPoolSize = null;
     static {
         PropertyConfigurator.configure("log4j.properties");
         logger = org.apache.log4j.Logger.getLogger(SendStrandedDataThread.class.getName());
@@ -36,7 +37,8 @@ public class SendStrandedDataThread implements Runnable {
     @Override
     public void run() {
         topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
-
+        ruleToThreadPoolSize = (Map<String, Map<String, AtomicLong>>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_THREADPOOLSIZE);
+        
         while (true) {
             Object[] o = strandedDataSend.poll();
             if (o == null) {
@@ -69,6 +71,8 @@ public class SendStrandedDataThread implements Runnable {
                 tsst.setName("SendToServiceThread-" + r.getTopic() + "-" + node.getName() + "-" + keyinterval);
                 tsst.start();
                 logger.info("begin to send " + count + " strandeddata for " + r.getTopic() + "-" + node.getName() + "-" + keyinterval + " to " + sendIP);
+                AtomicLong ruleToSize = ruleToThreadPoolSize.get(r.getTopic()).get(r.getServiceName());
+                ruleToSize.incrementAndGet();
             }
         }
     }

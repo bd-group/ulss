@@ -74,6 +74,8 @@ public class BlockEmitter {
     AtomicLong time = new AtomicLong(0);
     Map<String, AtomicLong> topicToPackage = null;
     AtomicLong packagecount = new AtomicLong(0);
+    Map<String, Map<String, AtomicLong>> ruleToThreadPoolSize = null;
+    Map<String, AtomicLong> serviceToThreadSize = null;
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -105,6 +107,8 @@ public class BlockEmitter {
         topicToNodes = (Map<String, ArrayList<RNode>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_NODES);
         topicToPackage = (Map<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_PACKAGE);
         packagecount = topicToPackage.get(topic);
+        ruleToThreadPoolSize = (Map<String, Map<String, AtomicLong>>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_THREADPOOLSIZE);
+        serviceToThreadSize = ruleToThreadPoolSize.get(topic);
 
         File out = new File(dataDir + "backup");
         synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_DIR)) {
@@ -131,7 +135,7 @@ public class BlockEmitter {
                 try {
                     dxr = dxreader.read(null, dxdecoder);
                 } catch (Exception ex) {
-                    logger.info(" the schema of the data is wrong, can not be writen into the file " + fsmit.getName() + ex,ex);
+                    logger.info(" the schema of the data is wrong, can not be writen into the file " + fsmit.getName() + ex, ex);
                     storeUselessData(topic, msg);
                     return;
                 }
@@ -185,9 +189,18 @@ public class BlockEmitter {
     }
 
     private void checkEnvironment() {
+        StringBuffer threadSize = new StringBuffer();
         while (!dataPool.isEmpty() || packagecount.get() > activePackageLimit || sendThreadPool.activeCount() > activeThreadCount || !isEmpty()) {
+            threadSize.delete(0, threadSize.length());
+            for (String str : serviceToThreadSize.keySet()) {
+                threadSize.append(" ");
+                threadSize.append(str);
+                threadSize.append(" ");
+                threadSize.append(serviceToThreadSize.get(str));
+            }
+
             logger.info(topic + " dataPool's size is " + dataPool.size() + " and the packagecount is " + packagecount.get() + " and the activeSendThreadCount's size is " + sendThreadPool.activeCount()
-                    + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
+                    + threadSize + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
                     + "MessageTransferStation is " + numOfQueues());
             try {
                 Thread.sleep(2000);
@@ -196,9 +209,17 @@ public class BlockEmitter {
             }
         }
 
+        threadSize.delete(0, threadSize.length());
+        for (String str : serviceToThreadSize.keySet()) {
+            threadSize.append(" ");
+            threadSize.append(str);
+            threadSize.append(" ");
+            threadSize.append(serviceToThreadSize.get(str));
+        }
+
         logger.info(topic + " dataPool's size is " + dataPool.size() + " and the packagecount is " + packagecount.get() + " and the activeSendThreadCount's size is " + sendThreadPool.activeCount()
-                    + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
-                    + "MessageTransferStation is " + numOfQueues());
+                + threadSize + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
+                + "MessageTransferStation is " + numOfQueues());
 
         count.set(0);
         String f = fsmit.getName();

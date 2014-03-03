@@ -44,12 +44,11 @@ public class GetFileFromMetaStore {
     String serviceName = null;
     String partT = null;
     String keywords = null;
-    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss");
     SimpleDateFormat dateFormat2 = new SimpleDateFormat("yyyy-MM-dd:HH");
     private static final int METASTORE_RETRY_INIT = 2000;
     private static final int ZOOKEEPER_RETRY_INIT = 2000;
     public static AtomicLong HANDLER_CLIENT_SIZE = new AtomicLong(0);
-//    private static final Long HANDLER_CLIENT_SIZE_MAX = 20L;
     private static final int CREATEFILE_RETRY_INIT = 2000;
     private static MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
     private static ConcurrentHashMap<String, Object[]> valueToFile = (ConcurrentHashMap<String, Object[]>) RuntimeEnv.getParam(GlobalVariables.VALUE_TO_FILE);
@@ -81,10 +80,6 @@ public class GetFileFromMetaStore {
         String sendIP = "";
         Long f_id = 0L;
         String road = "";
-//        while (true) {
-//            if (HANDLER_CLIENT_SIZE.longValue() < HANDLER_CLIENT_SIZE_MAX) {
-//                logger.info("the handler_client is smaller than the max size , then checkfileforinverval");
-//                HANDLER_CLIENT_SIZE.addAndGet(1L);
         Object[] ob = new Object[3];
 
         String[] keytime = keyinterval.split("\\|");
@@ -234,18 +229,6 @@ public class GetFileFromMetaStore {
             valueToFile.put(topic + keyinterval + node.getName(), ob);
             logger.info("choose the " + topic + " " + keyinterval + " " + node.getName() + " " + ob[0] + " " + ob[1] + " " + ob[2]);
         }
-
-//                HANDLER_CLIENT_SIZE.decrementAndGet();
-//                break;
-//            } else {
-//                logger.info("Handler Client for get file Size is larger than " + HANDLER_CLIENT_SIZE_MAX);
-//                try {
-//                    Thread.sleep(5000);
-//                } catch (InterruptedException ex) {
-//                    logger.error(ex, ex);
-//                }
-//            }
-//        }
     }
 
     /**
@@ -276,10 +259,6 @@ public class GetFileFromMetaStore {
                     logger.error("can not get the SFileList for " + topic + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1] + " " + keyinterval + ex, ex);
                     rcmetastore(icli);
                     attemp++;
-//                    try {
-//                        Thread.sleep(2000);
-//                    } catch (Exception e) {
-//                    }
                 }
             }
 
@@ -391,10 +370,6 @@ public class GetFileFromMetaStore {
                     rcmetastore(icli);
                     attemp++;
                 }
-//                try {
-//                    Thread.sleep(1000);
-//                } catch (Exception e) {
-//                }
             }
 
             if (lsf != null && !lsf.isEmpty()) {
@@ -527,10 +502,6 @@ public class GetFileFromMetaStore {
                                     rcmetastore(icli);
                                     attemp++;
                                 }
-//                                try {
-//                                    Thread.sleep(2000);
-//                                } catch (Exception e) {
-//                                }
                             }
 
                             if (aomlsf.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
@@ -641,10 +612,6 @@ public class GetFileFromMetaStore {
                     rcmetastore(icli);
                     attemp++;
                 }
-//                try {
-//                    Thread.sleep(500);
-//                } catch (Exception e) {
-//                }
             }
 
             ArrayList<String> nodeNames = new ArrayList<String>();
@@ -841,7 +808,9 @@ public class GetFileFromMetaStore {
                     continue;
                 }
             }
-            logger.info("new useful file for " + topic + " " + keyinterval + " " + node.getName() + " has be created");
+            Date date = new Date();
+            String time = dateFormat2.format(date);
+            logger.info(time + " new useful file for " + topic + " " + keyinterval + " " + node.getName() + " has be created");
         } finally {
             cli.release();
         }

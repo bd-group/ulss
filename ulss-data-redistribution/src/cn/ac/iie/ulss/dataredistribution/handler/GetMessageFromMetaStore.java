@@ -44,7 +44,7 @@ import org.apache.log4j.PropertyConfigurator;
  */
 public class GetMessageFromMetaStore implements Runnable {
 
-    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss");
     static Logger logger = null;
     Map<String, ArrayList<RNode>> topicToNodes = (Map<String, ArrayList<RNode>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_NODES);
     Map<String, String> metaToTopic = (Map<String, String>) RuntimeEnv.getParam(GlobalVariables.META_TO_TOPIC);

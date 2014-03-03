@@ -43,7 +43,7 @@ public class GetRuleFromDB {
     String time = null;
     ConcurrentHashMap<String, ArrayList<Rule>> topicToRules = null;
     ArrayList<String> transmitrule = null;
-    public static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss");
     private SimpleDaoImpl simpleDao = null;
     int attempSize = 1;
     static Logger logger = null;

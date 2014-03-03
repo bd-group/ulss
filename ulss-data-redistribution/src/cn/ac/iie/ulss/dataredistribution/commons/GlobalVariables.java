@@ -66,6 +66,7 @@ public class GlobalVariables {
     public static final String TOPIC_TO_CONSUMER = "topicToConsumer";
     public static final String TOPIC_TO_PACKAGE = "topicToPackage";
     public static final String TOPIC_TO_DATAPOOL = "topicToDataPool";
+    public static final String RULE_TO_THREADPOOLSIZE = "ruleToThreadPoolSize";
     static Logger logger = null;
 
     static {
@@ -114,7 +115,7 @@ public class GlobalVariables {
         logger.info("setting the ruleToCount to the Global Variables");
         ConcurrentHashMap<String, AtomicLong> ruleToCount = new ConcurrentHashMap<String, AtomicLong>();
         RuntimeEnv.addParam(RULE_TO_COUNT, ruleToCount);
-        
+
         logger.info("setting the ruleToFilterCount to the Global Variables");
         ConcurrentHashMap<String, AtomicLong> ruleToFilterCount = new ConcurrentHashMap<String, AtomicLong>();
         RuntimeEnv.addParam(RULE_TO_FILTERCOUNT, ruleToFilterCount);
@@ -186,10 +187,14 @@ public class GlobalVariables {
         logger.info("setting the topicToPackage to the Global Variables");
         Map<String, AtomicLong> topicToPackage = new HashMap<String, AtomicLong>();
         RuntimeEnv.addParam(TOPIC_TO_PACKAGE, topicToPackage);
-        
+
         logger.info("setting the topicToDataPool to the Global Variables");
         Map<String, ConcurrentLinkedQueue> topicToDataPool = new HashMap<String, ConcurrentLinkedQueue>();
         RuntimeEnv.addParam(TOPIC_TO_DATAPOOL, topicToDataPool);
+
+        logger.info("setting the ruleToThreadPoolSize to the Global Variables");
+        Map<String, Map<String, AtomicLong>> ruleToThreadPoolSize = new HashMap<String, Map<String, AtomicLong>>();
+        RuntimeEnv.addParam(RULE_TO_THREADPOOLSIZE, ruleToThreadPoolSize);
 
         logger.info("setting the detectNodeList and detectNode to the Global Variables");
         ConcurrentLinkedQueue<Object[]> detectNodeList = new ConcurrentLinkedQueue<Object[]>();

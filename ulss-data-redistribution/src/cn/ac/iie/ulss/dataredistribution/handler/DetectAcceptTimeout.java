@@ -33,6 +33,8 @@ public class DetectAcceptTimeout implements Runnable {
     Map<String, AtomicLong> topicToPackage = null;
     AtomicLong packagecount = new AtomicLong(0);
     Long activePackageLimit = 0L;
+    Map<String, Map<String, AtomicLong>> ruleToThreadPoolSize = null;
+    Map<String, AtomicLong> serviceToThreadSize = null;
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -54,13 +56,24 @@ public class DetectAcceptTimeout implements Runnable {
         topicToNodes = (Map<String, ArrayList<RNode>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_NODES);
         topicToPackage = (Map<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_PACKAGE);
         packagecount = topicToPackage.get(topic);
+        ruleToThreadPoolSize = (Map<String, Map<String, AtomicLong>>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_THREADPOOLSIZE);
+        serviceToThreadSize = ruleToThreadPoolSize.get(topic);
 
         long time = 0L;
         long count = 0L;
+        StringBuffer threadSize = new StringBuffer();
         while (true) {
             while (!dataPool.isEmpty() || packagecount.get() > activePackageLimit || sendThreadPool.activeCount() > activeThreadCount || !isEmpty()) {
+                threadSize.delete(0, threadSize.length());
+                for (String str : serviceToThreadSize.keySet()) {
+                    threadSize.append(" ");
+                    threadSize.append(str);
+                    threadSize.append(" ");
+                    threadSize.append(serviceToThreadSize.get(str));
+                }
+
                 logger.info(topic + " dataPool's size is " + dataPool.size() + " and the packagecount is " + packagecount.get() + " and the activeSendThreadCount's size is " + sendThreadPool.activeCount()
-                        + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
+                        + threadSize + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
                         + "MessageTransferStation is " + numOfQueues());
                 try {
                     Thread.sleep(2000);
@@ -71,8 +84,16 @@ public class DetectAcceptTimeout implements Runnable {
                 count = 0L;
             }
 
+            threadSize.delete(0, threadSize.length());
+            for (String str : serviceToThreadSize.keySet()) {
+                threadSize.append(" ");
+                threadSize.append(str);
+                threadSize.append(" ");
+                threadSize.append(serviceToThreadSize.get(str));
+            }
+
             logger.info(topic + " dataPool's size is " + dataPool.size() + " and the packagecount is " + packagecount.get() + " and the activeSendThreadCount's size is " + sendThreadPool.activeCount()
-                    + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
+                    + threadSize + " and the nodeNums of the MessageTransferStation is " + MessageTransferStation.getMessageTransferStation().size() + " and the num of queue in the "
                     + "MessageTransferStation is " + numOfQueues());
 
             if (emitter.getCount() > 0) {

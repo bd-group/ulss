@@ -12,7 +12,6 @@ import com.taobao.metamorphosis.client.consumer.MessageListener;
 import com.taobao.metamorphosis.exception.MetaClientException;
 import com.taobao.metamorphosis.utils.ZkUtils;
 import org.apache.log4j.PropertyConfigurator;
-import java.text.SimpleDateFormat;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
@@ -24,7 +23,6 @@ import org.apache.log4j.Logger;
  */
 public class DataAccepterThread implements Runnable {
 
-    public static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     String zkUrl = null;
     String topic = null;
     ConcurrentLinkedQueue dataPool = null;

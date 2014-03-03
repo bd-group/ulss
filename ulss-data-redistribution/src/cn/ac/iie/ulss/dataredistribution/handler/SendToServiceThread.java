@@ -59,7 +59,7 @@ public class SendToServiceThread implements Runnable {
     String keyinterval = null;
     Long f_id = 0L;
     String road = null;
-    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss");
     SimpleDateFormat dateFormat2 = new SimpleDateFormat("yyyy-MM-dd:HH");
     int attempSize = 2;
     private static final int METASTORE_RETRY_INIT = 2000;
@@ -70,6 +70,8 @@ public class SendToServiceThread implements Runnable {
     MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
     int count = 0;
 //    static byte[] li = new byte[0];
+    Map<String, Map<String, AtomicLong>> ruleToThreadPoolSize = null;
+    AtomicLong ruleToSize ;
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -92,14 +94,18 @@ public class SendToServiceThread implements Runnable {
         this.keywords = node.getKeywords();
         topicToHttpclient = (Map<String, HttpClient>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_HTTPCLIENT);
         ruleToCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_COUNT);
+        ruleToThreadPoolSize = (Map<String, Map<String, AtomicLong>>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_THREADPOOLSIZE);
+        ruleToSize = ruleToThreadPoolSize.get(rule.getTopic()).get(rule.getServiceName());
     }
 
     @Override
     public void run() {
         if (rule.getType() == 0 || rule.getType() == 1 || rule.getType() == 2 || rule.getType() == 3) {
             sendToType0123();
+            ruleToSize.decrementAndGet();
         } else if (rule.getType() == 4) {
             sendToType4();
+            ruleToSize.decrementAndGet();
         }
     }
 
@@ -123,7 +129,7 @@ public class SendToServiceThread implements Runnable {
                     reqEntity.setContentType("binary/octet-stream");
                     reqEntity.setChunked(true);
                     httppost.setEntity(reqEntity);
-                    logger.info("begin to send " + count + " messages for " + topic + " " + serviceName + " " + node.getName() + " to the " + url );
+//                    logger.info("begin to send " + count + " messages for " + topic + " " + serviceName + " " + node.getName() + " to the " + url );
                     response = httpClient.execute(httppost);
                     break;
                 } catch (ConnectionPoolTimeoutException ex) {
@@ -211,7 +217,7 @@ public class SendToServiceThread implements Runnable {
                     reqEntity.setContentType("binary/octet-stream");
                     reqEntity.setChunked(true);
                     httppost.setEntity(reqEntity);
-                    logger.info("begin to send " + count + " messages for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url);
+//                    logger.info("begin to send " + count + " messages for " + topic + " " + serviceName + " " + keyinterval + " " + node.getName() + " " + f_id + " to the " + url);
                     response = httpClient.execute(httppost);
                     break;
                 } catch (ConnectionPoolTimeoutException ex) {
@@ -1107,7 +1113,9 @@ public class SendToServiceThread implements Runnable {
                     continue;
                 }
             }
-            logger.info("new useful file for " + topic + " " + keyinterval + " " + node.getName() + " has be created");
+            Date date = new Date();
+            String time = dateFormat2.format(date);
+            logger.info(time + " new useful file for " + topic + " " + keyinterval + " " + node.getName() + " has be created");
         } finally {
             cli.release();
         }

@@ -54,6 +54,7 @@ public class DataSenderThread implements Runnable {
     int count = 0;
     long stime = 0L;
     long packagetimelimit = 0L;
+    Map<String, Map<String, AtomicLong>> ruleToThreadPoolSize = null;
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -86,6 +87,9 @@ public class DataSenderThread implements Runnable {
         topicToDataPool = (Map<String, ConcurrentLinkedQueue>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_DATAPOOL);
         datapool = topicToDataPool.get(topic);
         AtomicLong packagecount = topicToPackage.get(topic);
+        ruleToThreadPoolSize = (Map<String, Map<String, AtomicLong>>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_THREADPOOLSIZE);
+        AtomicLong ruleToSize = ruleToThreadPoolSize.get(rule.getTopic()).get(rule.getServiceName());
+        
         int timenum = 0;
 
         while (true) {
@@ -144,6 +148,7 @@ public class DataSenderThread implements Runnable {
                     Thread t = new Thread(sendThreadPool, sendT);
                     t.setName("SendToServiceThread-" + topic + "-" + serviceName + "-" + node.getName() + "-" + keyinterval);
                     t.start();
+                    ruleToSize.incrementAndGet();
                 }
                 packagecount.decrementAndGet();
             } else {

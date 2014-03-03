@@ -40,7 +40,7 @@ public class TransmitThread implements Runnable {
     ArrayList<Rule> ruleSet = null;
     public final String allChar = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     String topic = null;
-    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss");
     Schema msgSchema = null;
 //    Schema docsSchema = null;
 //    DatumReader<GenericRecord> docsreader = null;
