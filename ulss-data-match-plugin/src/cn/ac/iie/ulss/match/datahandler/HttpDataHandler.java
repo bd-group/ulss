@@ -110,7 +110,7 @@ public class HttpDataHandler extends AbstractHandler {
             docsReader.read(docsRecord, docsbd);
             String schemaName = docsRecord.get("doc_schema_name").toString().toLowerCase();
 
-            log.debug("now receive data is " + schemaName + " and the region is " + region);
+            //log.debug("now receive data is " + schemaName + " and the region is " + region);
             /*
              *得到对应的schemaInstance
              */
@@ -161,33 +161,33 @@ public class HttpDataHandler extends AbstractHandler {
             } else {
                 List<BusiMatchworker> workers = Matcher.schemaInstance2BusiMatchworkers.get(schemanameInstance);
 
-
-                synchronized (HttpDataHandler.lock) {
-                    try {
-                        if (Matcher.schemaInstance2MatchControler.get(schemanameInstance).isShouldNew.get()) {
-                            Matcher.schemaInstance2MatchControler.get(schemanameInstance).isShouldNew.set(false);
-                            cacheFileName = HttpDataHandler.schema2cachefile.get(schemanameInstance);
-                            if (cacheFileName == null) { //第一次创建时，
-                                cacheFileName = Matcher.rawdataCachePath + "/" + schemanameInstance + "+" + System.currentTimeMillis() / 1000 + "" + ".ori";
-                            } else {
-                                HttpDataHandler.closeAvroFile(cacheFileName);
-                                cacheFileName = Matcher.rawdataCachePath + "/" + schemanameInstance + "+" + System.currentTimeMillis() / 1000 + "" + ".ori";
-                            }
-                            log.info("new one cache data file " + cacheFileName);
-                            HttpDataHandler.schema2cachefile.put(schemanameInstance, cacheFileName);
-                            this.writeAvroFile(docsRecord, cacheFileName, true);
-                        } else {
-                            cacheFileName = HttpDataHandler.schema2cachefile.get(schemanameInstance);
-                            this.writeAvroFile(docsRecord, cacheFileName, false);
-                        }
-                    } catch (Exception ex) {
-                        log.error(ex, ex);
-                    }
-                }
+                /*
+                 synchronized (HttpDataHandler.lock) {
+                 try {
+                 if (Matcher.schemaInstance2MatchControler.get(schemanameInstance).isShouldNew.get()) {
+                 Matcher.schemaInstance2MatchControler.get(schemanameInstance).isShouldNew.set(false);
+                 cacheFileName = HttpDataHandler.schema2cachefile.get(schemanameInstance);
+                 if (cacheFileName == null) { //第一次创建时，
+                 cacheFileName = Matcher.rawdataCachePath + "/" + schemanameInstance + "+" + System.currentTimeMillis() / 1000 + "" + ".ori";
+                 } else {
+                 HttpDataHandler.closeAvroFile(cacheFileName);
+                 cacheFileName = Matcher.rawdataCachePath + "/" + schemanameInstance + "+" + System.currentTimeMillis() / 1000 + "" + ".ori";
+                 }
+                 log.info("new one cache data file " + cacheFileName);
+                 HttpDataHandler.schema2cachefile.put(schemanameInstance, cacheFileName);
+                 this.writeAvroFile(docsRecord, cacheFileName, true);
+                 } else {
+                 cacheFileName = HttpDataHandler.schema2cachefile.get(schemanameInstance);
+                 this.writeAvroFile(docsRecord, cacheFileName, false);
+                 }
+                 } catch (Exception ex) {
+                 log.error(ex, ex);
+                 }
+                 }*/
 
                 BusiMatchworker worker = null;
                 ConcurrentHashMap<Integer, LinkedBlockingQueue<BusiRecordNode>> tmpBuf = null;
-
+                LinkedBlockingQueue<BusiRecordNode> bl = new LinkedBlockingQueue<BusiRecordNode>(20);
                 bg = System.nanoTime();
                 int index = 0;
                 while (itor.hasNext()) {

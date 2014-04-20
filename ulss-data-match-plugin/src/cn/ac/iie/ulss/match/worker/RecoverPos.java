@@ -6,6 +6,8 @@ package cn.ac.iie.ulss.match.worker;
 
 import cn.ac.iie.ulss.struct.CDRRecordNode;
 import cn.ac.iie.ulss.util.FileFilter;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -29,9 +31,12 @@ public class RecoverPos {
         long bg = System.currentTimeMillis();
         try {
             FileOutputStream outStream = new FileOutputStream(path + "/" + region + "_" + secondFormat.format(new Date()) + ".pos");
-            ObjectOutputStream objectOutputStream = new ObjectOutputStream(outStream);
+            BufferedOutputStream bos = new BufferedOutputStream(outStream, 10 * 1024 * 1024);
+            ObjectOutputStream objectOutputStream = new ObjectOutputStream(bos);
             objectOutputStream.writeObject(topMap);
+
             objectOutputStream.close();
+            bos.close();
             outStream.close();
             log.info("dump the map position successful,use  " + (System.currentTimeMillis() - bg) + " milis seconds");
         } catch (FileNotFoundException e) {
@@ -42,13 +47,14 @@ public class RecoverPos {
     }
 
     public static ConcurrentHashMap<Long, ConcurrentHashMap<String, List<CDRRecordNode>>> imp(String path) {
+        long bg = System.currentTimeMillis();
         File file = new File(path + "/");
         String[] nameList = file.list(new FileFilter(".*\\.pos"));
         String targetPositionfile = "_0.";
         if (nameList == null || nameList.length == 0) {
             log.info("the pos information file does not exits ...");
             return null;
-        } else if (nameList != null) { 
+        } else if (nameList != null) {
             for (String s : nameList) {
                 log.info("now get the position store file " + s);
                 if (Long.parseLong(s.split("[_]")[1].split("[.]")[0]) >= Long.parseLong(targetPositionfile.split("[_]")[1].split("[.]")[0])) {
@@ -56,15 +62,18 @@ public class RecoverPos {
                 }
             }
         }
-        FileInputStream freader;
+        FileInputStream fis;
         try {
             log.info("now will use the recover file " + path + "/" + targetPositionfile + " to recover the position ... ");
-            freader = new FileInputStream(path + "/" + targetPositionfile);
-            ObjectInputStream objectInputStream = new ObjectInputStream(freader);
+            fis = new FileInputStream(path + "/" + targetPositionfile);
+            BufferedInputStream bis = new BufferedInputStream(fis, 10 * 1024 * 1024);
+            ObjectInputStream objectInputStream = new ObjectInputStream(bis);
             ConcurrentHashMap<Long, ConcurrentHashMap<String, List<CDRRecordNode>>> map = (ConcurrentHashMap<Long, ConcurrentHashMap<String, List<CDRRecordNode>>>) objectInputStream.readObject();
+
             objectInputStream.close();
-            freader.close();
-            log.info("imp the position from map successful ... ");
+            bis.close();
+            fis.close();
+            log.info("imp the position from map successful,use  " + (System.currentTimeMillis() - bg) + " milis seconds");
             return map;
         } catch (FileNotFoundException e) {
             log.error(e, e);
@@ -77,12 +86,9 @@ public class RecoverPos {
     }
 
     public static void main(String[] args) {
-
-
         String p = "heilongjiang_20131215170034.pos";
         System.out.println(p.split("[_]")[0]);
         System.out.println(p.split("[_]")[1]);
-
 
         ConcurrentHashMap<Long, ConcurrentHashMap<String, List<CDRRecordNode>>> mp = new ConcurrentHashMap<Long, ConcurrentHashMap<String, List<CDRRecordNode>>>();
         for (long i = 0; i < 10; i++) {
@@ -99,6 +105,5 @@ public class RecoverPos {
         }
         RecoverPos.dump(mp, ".", "");
         RecoverPos.imp(".");
-
     }
 }

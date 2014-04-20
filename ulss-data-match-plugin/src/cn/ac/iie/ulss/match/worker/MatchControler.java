@@ -146,7 +146,7 @@ public class MatchControler implements Runnable {
                 this.clearBufferIndex.set((this.httpReceiveBufferIndex.get() + 1) % this.smalWindowNum);
                 this.workBufferIndex.set((this.httpReceiveBufferIndex.get() + this.smalWindowNum - 1) % this.smalWindowNum);
 
-                log.info(this.schemaName + "：the buffer index for receive,clean,work is -> " + this.httpReceiveBufferIndex + " " + this.clearBufferIndex + " " + this.workBufferIndex);
+                //log.info(this.schemaName + "：the buffer index for receive,clean,work is -> " + this.httpReceiveBufferIndex + " " + this.clearBufferIndex + " " + this.workBufferIndex);
                 for (int i = 0; i < matchWorkers.length; i++) {
                     matchWorkers[i].isBegin.set(true);
                 }

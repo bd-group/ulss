@@ -175,14 +175,14 @@ public class MonitorHandler extends AbstractHandler {
                 if (region == null || "".equalsIgnoreCase(region)) {
                     for (String s : Matcher.cdrupdaters.keySet()) {
                         log.info("now will dump the position data for " + s);
-                        Matcher.cdrupdaters.get(s).isShouldDump.set(true);
+                        Matcher.cdrupdaters.get(s).isDumping.set(true);
                     }
                 } else {
-                    Matcher.cdrupdaters.get(region).isShouldDump.set(true);
+                    Matcher.cdrupdaters.get(region).isDumping.set(true);
                 }
                 responseContent = "it is doing the dump operation,please wait ...";
             } else {
-                responseContent = "nunknown operation";
+                responseContent = "unknown operation";
             }
         } catch (Exception e) {
             log.error(e, e);

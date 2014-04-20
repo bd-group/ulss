@@ -8,11 +8,13 @@ import cn.ac.iie.ulss.match.datahandler.HttpGetDataServer;
 import cn.ac.iie.ulss.match.sender.SendCxData;
 import cn.ac.iie.ulss.match.sender.SendDxData;
 import cn.ac.iie.ulss.match.sender.SendHlwData;
-import cn.ac.iie.ulss.match.sender.SendUtilData;
 import cn.ac.iie.ulss.match.shuthandler.KillHandler;
 import cn.ac.iie.ulss.struct.CDRRecordNode;
 import cn.ac.iie.ulss.util.Configure;
 import cn.ac.iie.ulss.util.MatchDBMeta;
+import iie.metastore.MetaStoreClient;
+import iie.mm.client.ClientAPI;
+import iie.mm.client.ClientConf;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -23,13 +25,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.logging.Level;
 import org.I0Itec.zkclient.ZkClient;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumReader;
+import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.metastore.api.Index;
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
@@ -99,6 +104,22 @@ public class Matcher {
     public static String docsSchemaContent = null;
     public static Schema docsSchema = null;
     public static DatumReader<GenericRecord> docsReader = null;
+    /*
+     *
+     */
+    public static MetaStoreClient cli = null;
+    /*
+     *
+     */
+    public static String metaStoreCient = "";
+    public static String metaStoreCientUrl = "";
+    public static int metaStoreCientPort = 0;
+    public static ConcurrentHashMap<String, ClientAPI> ClientAPIMap = new ConcurrentHashMap<String, ClientAPI>(10, 0.8f);  //db+table name 到table对象的映射
+
+    /*
+     *
+     */
+    public static AtomicBoolean isShouldExit = new AtomicBoolean(false);
 
     public static void initSchema() {
         log.info("start init all the schama \n ");
@@ -351,7 +372,6 @@ public class Matcher {
                             senThread.start();
                         }
                     }
-
                 } else if ("cx".equalsIgnoreCase(busiData)) {
                     log.info("new the send thread for the cx and cdr");
                     for (MatchControler mc : busiControlerMap.get(busiTypeInstance)) {
@@ -376,18 +396,37 @@ public class Matcher {
                             }
                         }
                     }
-                } else {
-                    log.info("new the send thread for the general data and cdr");
-                    for (MatchControler mc : busiControlerMap.get(busiTypeInstance)) {
-                        for (int i = 0; i < 2; i++) {
-                            SendUtilData sd = new SendUtilData(s, mc.resultSchemaName, Matcher.sendBatchSizeNum, mc.outBuf);
-                            Thread senThread = new Thread(sd);
-                            senThread.start();
-                        }
-                    }
                 }
             }
         }
+
+
+        Matcher.metaStoreCient = cfg.getProperty("metaStoreCient");
+        Matcher.metaStoreCientUrl = metaStoreCient.split("[:]")[0];
+        Matcher.metaStoreCientPort = Integer.parseInt(Matcher.metaStoreCient.split("[:]")[1]);
+        try {
+            Matcher.cli = new MetaStoreClient(metaStoreCientUrl, metaStoreCientPort);
+        } catch (MetaException ex) {
+            log.error(ex, ex);
+            return;
+        }
+        try {
+            List<Database> dbs = Matcher.cli.client.get_all_attributions();
+            for (Database db : dbs) {
+                String dbName = db.getName();
+                String mmurl = db.getParameters().get("mm.url");
+                if (mmurl != null && !"".equals(mmurl)) {
+                    ClientConf cc = new ClientConf();
+                    ClientAPI ca = new ClientAPI(cc);
+                    ca.init(mmurl);
+                    Matcher.ClientAPIMap.put(dbName, ca);
+                    log.info("the mm.url for " + dbName + " is " + mmurl);
+                }
+            }
+        } catch (Exception ex) {
+            log.error(ex, ex);
+        }
+
 
         log.info("start init the match http receive data server ...");
         try {
@@ -400,5 +439,37 @@ public class Matcher {
         KillHandler killhandle = new KillHandler();
         killhandle.registerSignal("TERM");
         log.info("init the kill handler done ");
+
+
+
+        while (true) {
+            try {
+                Thread.sleep(20000);
+            } catch (Exception ex) {
+            }
+            log.info("check the system is should exit ... \n\n");
+            if (Matcher.isShouldExit.get()) {
+                int count = 0;
+                while (true) {
+                    try {
+                        Thread.sleep(5);
+                    } catch (Exception ex) {
+                    }
+                    count++;
+                    for (List<MatchControler> mcs : busiControlerMap.values()) {
+                        for (MatchControler mc : mcs) {
+                            if (!mc.outBuf.isEmpty()) {
+                                count = 0;
+                            }
+                        }
+                    }
+                    if (count >= 2000) {
+                        log.info("now the system will exit safely .... \n\n");
+                        //System.gc();
+                        System.exit(0);
+                    }
+                }
+            }
+        }
     }
 }

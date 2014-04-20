@@ -174,6 +174,8 @@ public class SendDxData implements Runnable {
     }
 
     public boolean splitRecord(GenericRecord gr) throws InterruptedException { //一条原始dx返回 -- 其余dx、监控dx、超长dx、过滤dx四种类型的dx
+        GenericRecord restult = null;
+
         int dx_sf_toolong = Integer.parseInt(gr.get("c_sfccdx").toString());
         int dx_gl_lx = Integer.parseInt(gr.get("c_gllx").toString());
         int c_pzlx = -1;
@@ -181,16 +183,24 @@ public class SendDxData implements Runnable {
         GenericArray tlv_gz_pzids = (GenericData.Array<GenericRecord>) gr.get("tlv_gz_pzids");
         GenericArray tlv_dsx_pzids = (GenericData.Array<GenericRecord>) gr.get("tlv_dsx_pzids");
         if (tlv_fgz_pzids.size() == 0 && tlv_gz_pzids.size() == 0 && tlv_dsx_pzids.size() == 0) {
-            if (!qydxBuf.offer(newQYDXRecord(gr))) {
+            restult = null;
+            restult = newQYDXRecord(gr);
+            if (!qydxBuf.offer(restult)) {
                 return false;
             }
             if (dx_sf_toolong == 1) {
-                if (!ccdxBuf.offer(newCCDXRecord(gr, null))) {
+                restult = null;
+                restult = newCCDXRecord(gr, null);
+                restult.put("c_sfzt", 1);
+                if (!ccdxBuf.offer(restult)) {
                     return false;
                 }
             }
             if (dx_gl_lx != 0) {
-                if (!gldxBuf.offer(newGLDXRecord(gr, null))) {
+                //restult = null;
+                restult = newGLDXRecord(gr, null);
+                //restult.put("c_sfzt", 1);
+                if (!gldxBuf.offer(restult)) {
                     return false;
                 }
             }
@@ -219,20 +229,46 @@ public class SendDxData implements Runnable {
                     break;
                 }
             }
+            
+            int jkdxindex = 0;
+            int ccdxindex = 0;
+            int gldxindex = 0;
 
             for (Object o : tlv_fgz_pzids) {
                 GenericRecord tlv = (GenericRecord) o;
                 GenericRecord record = newJKDXRecord(gr, tlv);
+                jkdxindex += 1;
+                if (jkdxindex == 1) {
+                    record.put("c_sfzt", 1);
+                } else {
+                    record.put("c_sfzt", 0);
+                }
                 if (!jkdxBuf.offer(record)) {
                     return false;
                 }
+
                 if (dx_sf_toolong == 1) {
-                    if (!ccdxBuf.offer(newCCDXRecord(gr, tlv))) {
+                    record = newCCDXRecord(gr, tlv);
+                    ccdxindex += 1;
+                    if (ccdxindex == 1) {
+                        record.put("c_sfzt", 1);
+                    } else {
+                        record.put("c_sfzt", 0);
+                    }
+                    if (!ccdxBuf.offer(record)) {
                         return false;
                     }
                 }
                 if (dx_gl_lx != 0) {
-                    if (!gldxBuf.offer(newGLDXRecord(gr, tlv))) {
+                    record = newGLDXRecord(gr, tlv);
+                    gldxindex += 1;
+                    /*
+                     if (gldxindex == 1) {
+                     record.put("c_sfzt", 1);
+                     } else {
+                     record.put("c_sfzt", 0);
+                     }*/
+                    if (!gldxBuf.offer(record)) {
                         return false;
                     }
                 }
@@ -246,16 +282,38 @@ public class SendDxData implements Runnable {
             for (Object o : tlv_gz_pzids) {
                 GenericRecord tlv = (GenericRecord) o;
                 GenericRecord record = newJKDXRecord(gr, tlv);
+                jkdxindex += 1;
+                if (jkdxindex == 1) {
+                    record.put("c_sfzt", 1);
+                } else {
+                    record.put("c_sfzt", 0);
+                }
                 if (!jkdxBuf.offer(record)) {
                     return false;
                 }
+
                 if (dx_sf_toolong == 1) {
-                    if (!ccdxBuf.offer(newCCDXRecord(gr, tlv))) {
+                    record = newCCDXRecord(gr, tlv);
+                    ccdxindex += 1;
+                    if (ccdxindex == 1) {
+                        record.put("c_sfzt", 1);
+                    } else {
+                        record.put("c_sfzt", 0);
+                    }
+                    if (!ccdxBuf.offer(record)) {
                         return false;
                     }
                 }
                 if (dx_gl_lx != 0) {
-                    if (!gldxBuf.offer(newGLDXRecord(gr, tlv))) {
+                    record = newGLDXRecord(gr, tlv);
+                    gldxindex += 1;
+                    /*
+                     if (gldxindex == 1) {
+                     record.put("c_sfzt", 1);
+                     } else {
+                     record.put("c_sfzt", 0);
+                     }*/
+                    if (!gldxBuf.offer(record)) {
                         return false;
                     }
                 }
@@ -268,16 +326,39 @@ public class SendDxData implements Runnable {
 
             for (Object o : tlv_dsx_pzids) {
                 GenericRecord tlv = (GenericRecord) o;
-                if (!jkdxBuf.offer(newJKDXRecord(gr, tlv))) {
+                GenericRecord record = newJKDXRecord(gr, tlv);
+                jkdxindex += 1;
+                if (jkdxindex == 1) {
+                    record.put("c_sfzt", 1);
+                } else {
+                    record.put("c_sfzt", 0);
+                }
+                if (!jkdxBuf.offer(record)) {
                     return false;
                 }
+
                 if (dx_sf_toolong == 1) {
-                    if (!ccdxBuf.offer(newCCDXRecord(gr, tlv))) {
+                    record = newCCDXRecord(gr, tlv);
+                    ccdxindex += 1;
+                    if (ccdxindex == 1) {
+                        record.put("c_sfzt", 1);
+                    } else {
+                        record.put("c_sfzt", 0);
+                    }
+                    if (!ccdxBuf.offer(record)) {
                         return false;
                     }
                 }
                 if (dx_gl_lx != 0) {
-                    if (!gldxBuf.offer(newGLDXRecord(gr, tlv))) {
+                    record = newGLDXRecord(gr, tlv);
+                    gldxindex += 1;
+                    /*
+                     if (gldxindex == 1) {
+                     record.put("c_sfzt", 1);
+                     } else {
+                     record.put("c_sfzt", 0);
+                     }*/
+                    if (!gldxBuf.offer(record)) {
                         return false;
                     }
                 }
@@ -287,7 +368,6 @@ public class SendDxData implements Runnable {
                     }
                 }
             }
-
         }
         return true;
     }
@@ -474,3 +554,28 @@ public class SendDxData implements Runnable {
         }
     }
 }
+
+/*
+ *         for (Object o : tlv_gz_pzids) {
+                GenericRecord tlv = (GenericRecord) o;
+                GenericRecord record = newJKDXRecord(gr, tlv);
+                if (!jkdxBuf.offer(record)) {
+                    return false;
+                }
+                if (dx_sf_toolong == 1) {
+                    if (!ccdxBuf.offer(newCCDXRecord(gr, tlv))) {
+                        return false;
+                    }
+                }
+                if (dx_gl_lx != 0) {
+                    if (!gldxBuf.offer(newGLDXRecord(gr, tlv))) {
+                        return false;
+                    }
+                }
+                if (isQydx) {
+                    if (!qydxBuf.offer(newQYDXRecord(gr))) {
+                        return false;
+                    }
+                }
+            }
+ */

@@ -169,7 +169,7 @@ public class CDRRecordNode implements Serializable {
         System.out.println((char) 120 + "sds");
 
         CDRRecordNode c = new CDRRecordNode();
-        c.c_areacode="1";
+        c.c_areacode = "1";
         System.out.println(c.toString());
     }
 }

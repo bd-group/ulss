@@ -4,7 +4,6 @@
  */
 package cn.ac.iie.ulss.match.sender;
 
-
 import cn.ac.iie.ulss.match.worker.Matcher;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -42,7 +41,7 @@ public class SendHlwData implements Runnable {
         this.schemanameInstance = this.region + "." + this.schemaName;
         this.mqProducerPool = MQProducerPool.getMQProducerPool(Matcher.DBMeta.getMq(this.region, this.schemaName), 30);
         //this.mqProducerPool = MQProducerPool.getMQProducerPool(Matcher.schemanameInstance2metaq.get(schemanameInstance), 30);  //应该发往哪个topic,生产者池的大小
-        batchSize = bs;
+        batchSize = 3000;
         outBuf = b;
     }
 
@@ -56,7 +55,7 @@ public class SendHlwData implements Runnable {
         BinaryEncoder be = new EncoderFactory().binaryEncoder(bos, null);
         Schema docsSchema = Matcher.schemaname2Schema.get("docs");
         GenericRecord docsRecord = new GenericData.Record(Matcher.schemaname2Schema.get("docs"));
-        GenericArray docSet = new GenericData.Array<GenericRecord>(1000, Matcher.schemaname2Schema.get("docs").getField("doc_set").schema());
+        GenericArray docSet = new GenericData.Array<GenericRecord>(3000, Matcher.schemaname2Schema.get("docs").getField("doc_set").schema());
 
         for (GenericRecord gr : data) {
             gr.put("c_qd_szs", Matcher.qd_szs);
@@ -85,7 +84,7 @@ public class SendHlwData implements Runnable {
         List<GenericRecord> tmp = new ArrayList<GenericRecord>();
         while (true) {
             try {
-                Thread.sleep(5);
+                Thread.sleep(20);
             } catch (InterruptedException ex) {
             }
             if (outBuf.isEmpty()) {

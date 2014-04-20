@@ -39,7 +39,7 @@ public class CDRUpdater implements Runnable {
     AtomicBoolean isMain;
     final public Object lk;
     public LinkedBlockingQueue<CDRRecordNode> inbuf; //cdr记录的输入缓冲区
-    public AtomicBoolean isShouldDump = null;
+    public AtomicBoolean isDumping = null;
 
     CDRUpdater(String reg, String flowName, int smWinSize, int winNum,
             String[] acJoinAttributes,
@@ -58,7 +58,7 @@ public class CDRUpdater implements Runnable {
         this.lk = lock;
         this.maxStorePosNum = Matcher.maxStorePositionPerNumber;
 
-        this.isShouldDump = new AtomicBoolean(false);
+        this.isDumping = new AtomicBoolean(false);
     }
 
     @Override
@@ -157,16 +157,15 @@ public class CDRUpdater implements Runnable {
                 innerBuf.clear();
                 log.info("now the cdr map update and compression is over, use " + (System.currentTimeMillis() - bg) + " milliseconds ");
 
-                synchronized (lk) {
-                    if (isMain.get()) {
-                        //非更新cdrmap固定次数后就将数据dump出来
-                        if ((updateCount % (Matcher.posDumpIntervalMiliSeconds / this.updateInterval) == 0) || (this.isShouldDump.get())) {
-                            log.info("now will dump the position information map " + (this.isShouldDump.get() == true ? "" : ",it is manually dump"));
-                            this.isShouldDump.set(false);
-                            RecoverPos.dump(this.topMap, Matcher.positionDumpPath, this.region);
-                        }
-                        //this.simpleClearCDR(updateCount);
+                if (isMain.get()) {
+                    //非更新cdrmap固定次数后就将数据dump出来
+                    if ((this.isDumping.get())) {
+                        //if ((updateCount % (Matcher.posDumpIntervalMiliSeconds / this.updateInterval) == 0) || (this.isDumping.get())) {
+                        log.info("now will dump the position information map " + (this.isDumping.get() == true ? "" : ",it is manually dump"));
+                        RecoverPos.dump(this.topMap, Matcher.positionDumpPath, this.region);
+                        this.isDumping.set(false);
                     }
+                    //this.simpleClearCDR(updateCount);
                 }
             }
         }

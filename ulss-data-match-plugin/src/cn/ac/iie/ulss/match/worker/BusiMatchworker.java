@@ -118,15 +118,21 @@ public class BusiMatchworker implements Runnable {
         long bucket = 0;
         long bufferSize = 0;
         long remainCap = 0;
-        long s1 = 0;
-        long s2 = 0;
+        long data_timestamp = 0;
+        long cdr_timestamp = 0;
+
+        long timestamp_gab = 0;
+        int resultIndex = 0;
+
         Object tmpObj = null;
         String strKey = null;
         StringBuilder sb = new StringBuilder(100);
 
+        int logPrintCount = 0;
         BusiRecordNode tmpBusiRecord = null;
         List<CDRRecordNode> CDRRecords = null;
         CDRRecordNode tmpCdrRecord = null;
+        CDRRecordNode okCdrRecord = null;
         List<LinkedBlockingQueue<BusiRecordNode>> buffers = new ArrayList<LinkedBlockingQueue<BusiRecordNode>>();
         Schema resSchema = Matcher.schemaname2Schema.get(this.resultSchemaName); //比对结果的schema
         CDRRecordNode[] tmpArray = new CDRRecordNode[Matcher.maxStorePositionPerNumber];
@@ -139,11 +145,13 @@ public class BusiMatchworker implements Runnable {
                 }
                 continue;
             } else {
+                logPrintCount++;
+
                 for (LinkedBlockingQueue<BusiRecordNode> abq : this.inbuffer.values()) {
                     bufferSize += abq.size();
                     remainCap += abq.remainingCapacity();
                 }
-                log.info("now the data number in buffer is " + bufferSize + " and remaining capacity is " + remainCap);
+                //log.info("now the data number in buffer is " + bufferSize + " and remaining capacity is " + remainCap);
                 bufferSize = 0;
                 remainCap = 0;
 
@@ -152,7 +160,7 @@ public class BusiMatchworker implements Runnable {
                 buffers.add(matchWorkBuf);
                 buffers.add(cleanWorkBuf);
 
-                log.info("now begin do the match for dataflow " + this.schemanameInstance);
+                //log.info("now begin do the match for dataflow " + this.schemanameInstance);
                 AtomicLong num = Matcher.schemanameInstance2MatchOKTotal.get(this.schemanameInstance);
 
                 int okNum = 0;
@@ -175,6 +183,7 @@ public class BusiMatchworker implements Runnable {
                             strKey = sb.toString();
                             sb = sb.delete(0, sb.length());
                             if ("".equals(strKey)) {
+                                log.warn("the key is blank string ");
                                 continue;
                             }
 
@@ -185,28 +194,41 @@ public class BusiMatchworker implements Runnable {
                             bucket = hashcode % Matcher.topMapSize;
                             currentLevel2Map = topMatchMap.get(bucket);
 
-                            //synchronized (currentLevel2Map) {
                             if ((CDRRecords = currentLevel2Map.get(strKey)) != null) {
                                 tmpArray = CDRRecords.toArray(tmpArray);
-                                //okNum++;
                             }
-                            //}
-                            for (arrayIndex = 0; arrayIndex < tmpArray.length; arrayIndex++) {
-                                tmpCdrRecord = tmpArray[arrayIndex];
-                                if (tmpCdrRecord == null) {
-                                    continue;
+                            okCdrRecord = null;
+                            tmpCdrRecord = null;
+                            cdr_timestamp = 0;
+                            timestamp_gab = Long.MAX_VALUE;
+                            if (tmpArray.length > 0) {
+                                data_timestamp = (Long) tmpBusiRecord.getGenericRecord().get(this.fuzzyJoinAttribute);//得到业务数据自己的时间戳
+                                for (arrayIndex = 0; arrayIndex < tmpArray.length; arrayIndex++) {
+                                    tmpCdrRecord = tmpArray[arrayIndex];
+                                    if (tmpCdrRecord == null) {
+                                        continue;
+                                    }
+//                                     else {
+//                                        okCdrRecord = tmpCdrRecord;
+//                                        break;
+//                                    }
+                                    if (Math.abs(tmpCdrRecord.c_timestamp - data_timestamp) <= timestamp_gab) {
+                                        timestamp_gab = Math.abs(tmpCdrRecord.c_timestamp - data_timestamp);
+                                        resultIndex = arrayIndex;
+                                        tmpCdrRecord = tmpArray[resultIndex];
+                                        okCdrRecord = tmpCdrRecord;
+                                        cdr_timestamp = (Long) okCdrRecord.c_timestamp;
+                                    }
                                 }
-                                s1 = (Long) tmpBusiRecord.getGenericRecord().get(this.fuzzyJoinAttribute);//得到自己的时间戳
-                                s2 = (Long) tmpCdrRecord.c_timestamp;
-                                if (Math.abs(s1 - s2) <= this.maxDeviation) {   //判断是否比对上
+                                //if (Math.abs(data_timestamp - cdr_timestamp) <= this.maxDeviation && okCdrRecord != null) {   //判断是否比对上
+                                if (okCdrRecord != null) {   //判断是否比对上
                                     GenericRecord record = new GenericData.Record(resSchema);
                                     for (recordFieldIdx = 0; recordFieldIdx < this.resultOwnAttributes.length; recordFieldIdx++) {
                                         record.put(resultOwnAttributes[recordFieldIdx], tmpBusiRecord.genRecord.get(resultOwnAttributes[recordFieldIdx].toLowerCase()));
                                     }
                                     for (recordFieldIdx = 0; recordFieldIdx < this.resultOtherAttributes.length; recordFieldIdx++) {
                                         try {
-                                            //log.debug("the first field is " + record + "---" + record.get(0) + ", and now will set " + (resultOwnAttributes.length + i) + "get" + resultOtherAttributes[i].toLowerCase() + " " + tmpCdrRecord);
-                                            record.put(resultOwnAttributes.length + recordFieldIdx, methodMap.get("get" + resultOtherAttributes[recordFieldIdx].toLowerCase()).invoke(tmpCdrRecord));
+                                            record.put(resultOwnAttributes.length + recordFieldIdx, methodMap.get("get" + resultOtherAttributes[recordFieldIdx].toLowerCase()).invoke(okCdrRecord));
                                         } catch (Exception ex) {
                                             log.error(ex, ex);
                                         }
@@ -218,9 +240,7 @@ public class BusiMatchworker implements Runnable {
                                         log.error(ex, ex);
                                     }
                                     it.remove();
-                                    //log.debug(record + " <------> " + tmpCdrRecord);
                                     okNum++;
-                                    break;
                                 }
                             }
                             for (arrayIndex = 0; arrayIndex < tmpArray.length; arrayIndex++) {
@@ -229,16 +249,21 @@ public class BusiMatchworker implements Runnable {
                         }
                     }
                 }
-                log.info("now do math opteraion use " + (System.currentTimeMillis() - bgMatchTime) + " ms for " + totalMatchNum);
+                if (logPrintCount % 20 == 0) {
+                    log.info("now do math opteraion use " + (System.currentTimeMillis() - bgMatchTime) + " ms for " + totalMatchNum);
+                }
 
                 buffers.clear();
                 num.addAndGet(okNum);
 
-                log.info("now the match operation is over，begin clear the sliding window buffer for " + this.schemanameInstance);
+                //log.info("now the match operation is over，begin clear the sliding window buffer for " + this.schemanameInstance);
                 this.simpleClearWindow();
-
                 this.isBegin.set(false);
-                log.info("clear sliding window ok，now for dataflow " + this.schemanameInstance + " match successful num is " + num.get());
+
+                if (logPrintCount % 20 == 0) {
+                    log.info("clear sliding window ok，now for dataflow " + this.schemanameInstance + " match successful num is " + num.get());
+                    logPrintCount = 0;
+                }
             }
         }
     }
@@ -257,7 +282,7 @@ public class BusiMatchworker implements Runnable {
                     this.outBuf.put(record);
                 }
             }
-            log.info("after clear the window，the size of output buffer is " + this.outBuf.size());
+            //log.info("after clear the window，the size of output buffer is " + this.outBuf.size());
             buf.clear();
         } catch (Exception ex) {
             log.error(ex, ex);

@@ -10,8 +10,7 @@ import java.security.NoSuchAlgorithmException;
 
 /**
  *
- * @author evan yang
- * MD5-based hash algorithm used by ketama.
+ * @author evan yang MD5-based hash algorithm used by ketama.
  */
 public enum HashAlgorithm {
 
