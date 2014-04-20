@@ -2,7 +2,7 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package cn.ac.iie.ulss.util;
+package cn.ac.iie.ulss.utiltools;
 
 /**
  *

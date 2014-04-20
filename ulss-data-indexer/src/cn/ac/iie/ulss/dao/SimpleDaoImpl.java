@@ -24,8 +24,8 @@ import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.support.JdbcDaoSupport;
 import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.transaction.annotation.Transactional;
-import cn.ac.iie.ulss.util.DbUtilSpring;
-import cn.ac.iie.ulss.util.JdbcInfo;
+import cn.ac.iie.ulss.utiltools.DbUtilSpring;
+import cn.ac.iie.ulss.utiltools.JdbcInfo;
 import cn.ac.iie.ulss.struct.ColumnSetHolder;
 
 /**

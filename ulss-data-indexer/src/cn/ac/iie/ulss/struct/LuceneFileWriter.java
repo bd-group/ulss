@@ -16,6 +16,7 @@ import org.apache.lucene.index.IndexWriter;
  */
 public class LuceneFileWriter {
     //对于哈希分区会有多个writer，每个分区对应一个物理文件，对应一个writer，因此会有多个writer；  并且有多个SFile对应
+
     private ConcurrentHashMap<Integer, IndexWriter> writerMap;
     private ConcurrentHashMap<Integer, List<SFile>> sfMap;
 
