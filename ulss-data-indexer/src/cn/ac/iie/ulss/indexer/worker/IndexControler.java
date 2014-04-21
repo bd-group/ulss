@@ -160,7 +160,6 @@ public class IndexControler implements Runnable {
                 if (tmpFuture.isDone()) {
                     it.remove();
                 }
-                //log.info("the exe result is " + tmpFuture.isDone());
             }
             currentParallelNum = executeResultPool.size();
 
@@ -171,7 +170,8 @@ public class IndexControler implements Runnable {
                 //}
             }
 
-            if ((!this.inbuffer.isEmpty() || (System.currentTimeMillis() - lastWriteTime >= 1000 * 2)) && currentParallelNum < Indexer.luceneWriterMaxParallelNum) {  //并发数不超过限制，并且输入缓冲区中不为空
+            //if ((!this.inbuffer.isEmpty() || (System.currentTimeMillis() - lastWriteTime >= 1000 * 2)) && currentParallelNum < Indexer.luceneWriterMaxParallelNum) {  //并发数不超过限制，并且输入缓冲区中不为空
+            if (!this.inbuffer.isEmpty() && currentParallelNum < Indexer.luceneWriterMaxParallelNum) {  //并发数不超过限制，并且输入缓冲区中不为空
                 try {
                     pw = null;
                     future = null;
@@ -203,46 +203,30 @@ public class IndexControler implements Runnable {
                                 dataWriter.innerDataBuf.add(tmpGenericRecord);
                                 bufferSizeInfact += ((GenericData.Array<GenericRecord>) tmpGenericRecord.get(Indexer.docs_set)).size();
                             }
-
-                            /*
-                             this.inbuffer.drainTo(dataWriter.innerDataBuf, Indexer.writeInnerpoolBatchDrainSize);
-                             for (GenericRecord ms : dataWriter.innerDataBuf) {
-                             docSet = (GenericData.Array<GenericRecord>) ms.get(Indexer.docs_set);
-                             bufferSizeInfact += docSet.size();
-                             docSet = null;
-                             }*/
-
                             if (bufferSizeInfact >= Indexer.writeMinNumOnce || (System.currentTimeMillis() - tmp) >= 1000 * Indexer.submitTimeout) {
-                                log.info("will submit one task ...");
-                                Future f = threadPool.submit(dataWriter);
-                                pw.result = f;
-                                executeResultPool.add(f);
-
-                                currentParallelNum++;
+                                if (bufferSizeInfact != 0) {
+                                    log.info("will submit one task ...");
+                                    Future f = threadPool.submit(dataWriter);
+                                    pw.result = f;
+                                    executeResultPool.add(f);
+                                    currentParallelNum++;
+                                } else {
+                                    bufferEmptyCount += (1000 * Indexer.submitTimeout) / sleepMilis;
+                                }
                                 lastWriteTime = System.currentTimeMillis();
                                 break;
                             }
-                            /*else if (this.inbuffer.isEmpty()) {
-                             try {
-                             Thread.sleep(5);
-                             } catch (Exception ex) {
-                             log.error(ex, ex);
-                             }
-                             }*/
                         }
-
                     } else {
                         log.warn("null command,it is wrong ...");
                     }
                 }
-
                 try {
                     writerPool.put(pw);
                 } catch (Exception e) {
                     log.error(e, e);
                 }
             }
-
             if (printCount % (printGab / sleepMilis) == 0) {
                 //if (currentParallelNum >= 2) {
                 log.info("after dispatch new task,the parallel num is " + currentParallelNum + ",the data pool size is " + this.inbuffer.size());
@@ -370,10 +354,6 @@ public class IndexControler implements Runnable {
          */
         isAllOver.set(true);
     }
-    /*
-     * 
-     * 
-     */
 
     public static void main(String[] args) {
         ZkClient zc = new ZkClient("192.168.120.221:3181");
@@ -392,6 +372,19 @@ public class IndexControler implements Runnable {
         }
     }
 }
+//
+//
+//
 //if (this.inbuffer.size() >= Indexer.writeInnerpoolSize || System.currentTimeMillis() - lastWriteTime >= 1000 * 3) {
 //if (!this.inbuffer.isEmpty() && currentParallelNum < Indexer.luceneWriterMaxParallelNum) {  //并发数不超过限制，并且输入缓冲区中不为空
-
+/*
+ * 
+ this.inbuffer.drainTo(dataWriter.innerDataBuf, Indexer.writeInnerpoolBatchDrainSize);
+ for (GenericRecord ms : dataWriter.innerDataBuf) {
+ docSet = (GenericData.Array<GenericRecord>) ms.get(Indexer.docs_set);
+ bufferSizeInfact += docSet.size();
+ docSet = null;
+ * 
+ * 
+ }
+ */
