@@ -1,0 +1,4 @@
+2014-04-16 13:37:23,264 DEBUG main org.I0Itec.zkclient.ZkConnection 63 - Creating new ZookKeeper instance to connect to 192.168.1.17:3181.
+2014-04-16 13:37:23,264 INFO ZkClient-EventThread-9-192.168.1.17:3181 org.I0Itec.zkclient.ZkEventThread 64 - Starting ZkClient event thread.
+2014-04-16 13:37:23,385 DEBUG main org.I0Itec.zkclient.ZkClient 874 - Awaiting connection to Zookeeper server
+2014-04-16 13:37:23,386 DEBUG main org.I0Itec.zkclient.ZkClient 628 - Waiting for keeper state SyncConnected
