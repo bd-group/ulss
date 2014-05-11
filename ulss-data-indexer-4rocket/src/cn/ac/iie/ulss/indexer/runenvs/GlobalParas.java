@@ -180,6 +180,10 @@ public class GlobalParas {
      */
     public static int badfileinfoReserveSeconds = 3600;
     public static int badfileinfoCheckGab = 60;
+    /*
+     * 
+     */
+    public static int indexerBufferFullSleepMilis = 600;
 
 
     /*
@@ -266,6 +270,8 @@ public class GlobalParas {
 
         GlobalParas.badfileinfoCheckGab = cfg.getIntProperty("badfileinfoCheckGab");
         GlobalParas.badfileinfoReserveSeconds = cfg.getIntProperty("badfileinfoReserveSeconds");
+
+        GlobalParas.indexerBufferFullSleepMilis = cfg.getIntProperty("indexerBufferFullSleepMilis");
     }
 
     public static void main(String[] ars) {

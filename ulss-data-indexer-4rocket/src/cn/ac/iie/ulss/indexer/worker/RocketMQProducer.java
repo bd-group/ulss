@@ -40,7 +40,7 @@ public class RocketMQProducer {
         return producer;
     }
 
-    public static void sendMessage(String topic, byte[] pData) {
+    public static void sendMessage(String topic, byte[] pData, int count) {
         long bg = System.currentTimeMillis();
         SendResult sendResult = null;
         Message msg = new Message(topic, pData);
@@ -54,12 +54,12 @@ public class RocketMQProducer {
                         log.warn("send message fail one time,will sleep and retry,the information is " + producer.getClientIP() + " " + producer.getProducerGroup());
                     }
                     try {
-                        Thread.sleep(200);
+                        Thread.sleep(50);
                     } catch (Exception e) {
                     }
                     continue;
                 } else {
-                    log.info("send to metaq use " + (System.currentTimeMillis() - bg) + " ms for " + topic);
+                    log.info("send to metaq use " + (System.currentTimeMillis() - bg) + " ms for " + count + " " + topic);
                     return;
                 }
             } catch (Exception ex) {

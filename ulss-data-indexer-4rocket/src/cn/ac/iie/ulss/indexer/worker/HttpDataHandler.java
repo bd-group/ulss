@@ -295,8 +295,9 @@ public class HttpDataHandler extends AbstractHandler {
             } catch (Exception ex) {
                 log.error(ex, ex);
             }
+        } finally {
+            HttpDataHandler.activethreadNum.decrementAndGet();
         }
-        HttpDataHandler.activethreadNum.decrementAndGet();
     }
 
     public static HttpDataHandler geHttptDataHandler() {

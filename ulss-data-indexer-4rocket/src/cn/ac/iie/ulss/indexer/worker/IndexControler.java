@@ -49,6 +49,7 @@ public class IndexControler implements Runnable {
     private IndexWriter iw = null;
     private List<SFile> Listsf = null; //实际上有且只有一个文件
     AtomicBoolean isDiskBad;
+    AtomicBoolean isFileStatusBad;
     /*
      */
     AtomicLong willWriteNum;
@@ -77,6 +78,7 @@ public class IndexControler implements Runnable {
             Listsf = this.normalLucWriter.getSfMap().get(0);
         }
         isDiskBad = new AtomicBoolean(false);
+        isFileStatusBad = new AtomicBoolean(false);
         /*
          */
         willWriteNum = new AtomicLong(0);
@@ -339,6 +341,9 @@ public class IndexControler implements Runnable {
         }
 
         if (!GlobalParas.isTestMode) {
+            if (isFileStatusBad.get()) {
+                Listsf.get(0).setLoad_status(1);
+            }
             if (MetastoreWrapper.closeFile(Listsf.get(0), doc_num, file_legth)) {
                 MetastoreWrapper.retryCloseUnclosedFile(GlobalParas.unclosedFilePath);
             } else {

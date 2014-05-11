@@ -5,8 +5,6 @@
 package cn.ac.iie.ulss.indexer.metastore;
 
 import cn.ac.iie.ulss.indexer.runenvs.GlobalParas;
-import cn.ac.iie.ulss.indexer.worker.HttpDataHandler;
-import cn.ac.iie.ulss.indexer.worker.Indexer;
 import iie.metastore.MetaStoreClient;
 import java.io.BufferedReader;
 import java.io.File;
@@ -36,8 +34,10 @@ public class MetastoreWrapper {
         while (!isOver) {
             MetaStoreClient msc = GlobalParas.clientPool.getClient();
             try {
+                log.info("will online the file " + sf.getFid());
                 msc.client.online_filelocation(sf);
                 isOver = true;
+                return true;
             } catch (MetaException e) {
                 log.error(e, e);
                 s.append("online operation is error for " + e.getMessage() + ",and the file_id is " + sf.getFid());
@@ -46,7 +46,7 @@ public class MetastoreWrapper {
                 log.error(ex, ex);
                 isOver = false;
                 errorCount++;
-                MetaStoreClient tmp = GlobalParas.clientPool.getOneNewClient();
+                MetaStoreClient tmp = GlobalParas.clientPool.makesureGetOneNewClient();
                 if (tmp != null) {
                     msc = tmp;
                 } else {
@@ -78,7 +78,10 @@ public class MetastoreWrapper {
         while (!isOver) {
             MetaStoreClient msc = GlobalParas.clientPool.getClient();
             try {
+                log.info("will set the file to bad " + file_id);
                 msc.client.set_loadstatus_bad(file_id);
+                isOver = true;
+                return true;
             } catch (MetaException e) {
                 log.error(e, e);
                 return false;
@@ -86,7 +89,7 @@ public class MetastoreWrapper {
                 log.error(ex, ex);
                 isOver = false;
                 errorCount++;
-                MetaStoreClient tmp = GlobalParas.clientPool.getOneNewClient();
+                MetaStoreClient tmp = GlobalParas.clientPool.makesureGetOneNewClient();
                 if (tmp != null) {
                     msc = tmp;
                 } else {
@@ -123,8 +126,10 @@ public class MetastoreWrapper {
         while (!isOver) {
             MetaStoreClient msc = GlobalParas.clientPool.getClient();
             try {
+                log.info("will get file " + file_id);
                 sf = msc.client.get_file_by_id(file_id);
                 isOver = true;
+                return sf;
             } catch (FileOperationException e) {
                 isOver = true;
                 if (e.getReason() == FOFailReason.NOTEXIST) {
@@ -137,7 +142,7 @@ public class MetastoreWrapper {
                 log.error(e, e);
                 isOver = false;
                 errorCount++;
-                MetaStoreClient tmp = GlobalParas.clientPool.getOneNewClient();
+                MetaStoreClient tmp = GlobalParas.clientPool.makesureGetOneNewClient();
                 if (tmp != null) {
                     msc = tmp;
                 } else {
@@ -170,6 +175,7 @@ public class MetastoreWrapper {
         while (true) {
             MetaStoreClient msc = GlobalParas.clientPool.getClient();
             try {
+                log.info("will reopen file " + file_id);
                 msc.client.reopen_file(file_id);
                 return true;
             } catch (FileOperationException e) {
@@ -196,7 +202,7 @@ public class MetastoreWrapper {
             } catch (TException e) {
                 log.error(e, e);
                 errorCount++;
-                MetaStoreClient tmp = GlobalParas.clientPool.getOneNewClient();
+                MetaStoreClient tmp = GlobalParas.clientPool.makesureGetOneNewClient();
                 if (tmp != null) {
                     msc = tmp;
                 } else {
@@ -225,6 +231,7 @@ public class MetastoreWrapper {
             SFile tmp = null;
             MetaStoreClient msc = GlobalParas.clientPool.getClient();
             try {
+                log.info("will close file " + sf.getFid());
                 GlobalParas.id2Createindex.remove(sf.getFid());
                 tmp = sf;
                 log.info("close normal sfile " + sf.toString());

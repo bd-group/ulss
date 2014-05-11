@@ -54,7 +54,7 @@ public class MetastoreClientPool {
         while ((client = clientPool.poll()) == null) {
             log.warn("can't get the metastoreclient from the MetastoreClientPool,the pool has no more client，will retry ...");
             try {
-                Thread.sleep(5000);
+                Thread.sleep(1000);
             } catch (InterruptedException ex) {
                 log.error(ex, ex);
             }
