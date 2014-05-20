@@ -5,6 +5,7 @@
 package cn.ac.iie.ulss.dataredistribution.tools;
 
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.DynamicAllocate;
+import cn.ac.iie.ulss.dataredistribution.consistenthashing.HashCodeNodeLocator;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.MD5NodeLocator;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.NodeLocator;
@@ -161,7 +162,7 @@ public class Rule {
      *
      * update rule's nodeUrls , nodelocator , keywords , partType
      */
-    public synchronized void changerule(ArrayList<RNode> nurl, MD5NodeLocator nodelocator, String keywords, String partType) {
+    public synchronized void changerule(ArrayList<RNode> nurl, HashCodeNodeLocator nodelocator, String keywords, String partType) {
         this.nodeUrls = nurl;
         this.nodelocator = nodelocator;
         this.keywords = keywords;

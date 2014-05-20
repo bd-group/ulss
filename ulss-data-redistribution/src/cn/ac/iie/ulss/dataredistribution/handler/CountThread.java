@@ -17,7 +17,7 @@ import org.apache.log4j.PropertyConfigurator;
  *
  * @author evan
  */
-class CountThread implements Runnable {
+public class CountThread implements Runnable {
 
     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd:HH");
     static org.apache.log4j.Logger logger = null;
@@ -37,19 +37,34 @@ class CountThread implements Runnable {
         ConcurrentHashMap<String, AtomicLong> topicToAcceptCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_ACCEPTCOUNT);
         ConcurrentHashMap<String, AtomicLong> ruleToCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_COUNT);
         ConcurrentHashMap<String, AtomicLong> ruleToFilterCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_FILTERCOUNT);
+        Calendar newcal = null;
+        Date date = null;
+        String time = null;
         while (true) {
             try {
-                Thread.sleep(5000);
+                Thread.sleep(30000);
             } catch (InterruptedException ex) {
-                logger.error(ex, ex);
+                //logger.error(ex, ex);
             }
-            Calendar newcal = Calendar.getInstance();
+            newcal = Calendar.getInstance();
             newcal.set(12, 0);
             newcal.set(13, 0);
             newcal.set(14, 0);
             if (newcal.getTimeInMillis() > mtime) {
-                System.out.println(newcal.getTimeInMillis());
-                System.out.println(mtime);
+                date = new Date();
+                time = dateFormat.format(date);
+                for (String topic : topicToAcceptCount.keySet()) {
+                    logger.info(time + " this hour final accept " + topicToAcceptCount.get(topic) + " messages from " + topic);
+                }
+
+                for (String rule : ruleToCount.keySet()) {
+                    logger.info(time + " this hour final send " + ruleToCount.get(rule) + " messages for " + rule);
+                }
+
+                for (String rule : ruleToFilterCount.keySet()) {
+                    logger.info(time + " this hour final filter " + ruleToFilterCount.get(rule) + " messages for " + rule);
+                }
+
                 for (String topic : topicToAcceptCount.keySet()) {
                     topicToAcceptCount.get(topic).set(0L);
                 }
@@ -57,15 +72,15 @@ class CountThread implements Runnable {
                 for (String rule : ruleToCount.keySet()) {
                     ruleToCount.get(rule).set(0L);
                 }
-                
+
                 for (String rule : ruleToFilterCount.keySet()) {
                     ruleToFilterCount.get(rule).set(0L);
                 }
-                
+
                 mtime = newcal.getTimeInMillis();
             }
-            Date date = new Date();
-            String time = dateFormat.format(date);
+            date = new Date();
+            time = dateFormat.format(date);
             for (String topic : topicToAcceptCount.keySet()) {
                 logger.info(time + " this hour accept " + topicToAcceptCount.get(topic) + " messages from " + topic);
             }
@@ -73,7 +88,7 @@ class CountThread implements Runnable {
             for (String rule : ruleToCount.keySet()) {
                 logger.info(time + " this hour send " + ruleToCount.get(rule) + " messages for " + rule);
             }
-            
+
             for (String rule : ruleToFilterCount.keySet()) {
                 logger.info(time + " this hour filter " + ruleToFilterCount.get(rule) + " messages for " + rule);
             }

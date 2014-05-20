@@ -4,8 +4,6 @@
  */
 package cn.ac.iie.ulss.dataredistribution.handler;
 
-import cn.ac.iie.ulss.dataredistribution.commons.GlobalVariables;
-import cn.ac.iie.ulss.dataredistribution.commons.RuntimeEnv;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
 import cn.ac.iie.ulss.dataredistribution.tools.MessageTransferStation;
 import cn.ac.iie.ulss.dataredistribution.tools.Rule;
@@ -20,6 +18,7 @@ import org.apache.log4j.PropertyConfigurator;
  * @author evan
  */
 class RemoveNodeFromMessageTransferStation implements Runnable {
+
     Rule r = null;
     ArrayList<RNode> nurl = null;
     static org.apache.log4j.Logger logger = null;
@@ -29,7 +28,7 @@ class RemoveNodeFromMessageTransferStation implements Runnable {
         logger = org.apache.log4j.Logger.getLogger(GetRuleFromDB.class.getName());
     }
 
-    public RemoveNodeFromMessageTransferStation(Rule r , ArrayList<RNode> nurl) {
+    public RemoveNodeFromMessageTransferStation(Rule r, ArrayList<RNode> nurl) {
         this.r = r;
         this.nurl = nurl;
     }
@@ -41,17 +40,17 @@ class RemoveNodeFromMessageTransferStation implements Runnable {
         for (RNode n : nurl) {
             ConcurrentHashMap<String, ConcurrentLinkedQueue> chm = (ConcurrentHashMap<String, ConcurrentLinkedQueue>) messageTransferStation.get(n);
             while (true) {
-                if (chm.isEmpty()) {
-                    synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
+                synchronized (chm) {
+                    if (chm.isEmpty()) {
                         messageTransferStation.remove(n);
-                    }
-                    logger.info("messageTransmitStation remove the node " + n.getName() + " for the " + r.getTopic() + " " + r.getServiceName());
-                    break;
-                } else {
-                    try {
-                        Thread.sleep(5000);
-                    } catch (InterruptedException ex) {
-                        logger.error(ex, ex);
+                        logger.info("messageTransmitStation remove the node " + n.getName() + " for the " + r.getTopic() + " " + r.getServiceName());
+                        break;
+                    } else {
+                        try {
+                            Thread.sleep(5000);
+                        } catch (InterruptedException ex) {
+                            logger.error(ex, ex);
+                        }
                     }
                 }
             }

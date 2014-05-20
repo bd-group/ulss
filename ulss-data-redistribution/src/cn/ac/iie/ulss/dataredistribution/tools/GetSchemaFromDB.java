@@ -41,7 +41,7 @@ public class GetSchemaFromDB {
         String sql = "select DATASCHEMA_MQ.MQ,DATASCHEMA.SCHEMA_CONTENT from DATASCHEMA_MQ,DATASCHEMA WHERE DATASCHEMA_MQ.SCHEMA_NAME=DATASCHEMA.SCHEMA_NAME";
         List<List<String>> rs = simpleDao.queryForList(sql);
         for (List<String> r1 : rs) {
-            topicToSchemaContent.put(r1.get(0), r1.get(1).toLowerCase());
+            topicToSchemaContent.put(r1.get(0).toLowerCase(), r1.get(1).toLowerCase());
         }
 
         String sqldocs = "select SCHEMA_CONTENT from DATASCHEMA WHERE SCHEMA_NAME='docs'";
@@ -53,7 +53,7 @@ public class GetSchemaFromDB {
         String sqls = "select MQ,SCHEMA_NAME from DATASCHEMA_MQ";
         List<List<String>> rss = simpleDao.queryForList(sqls);
         for (List<String> r3 : rss) {
-            topicToSchemaName.put(r3.get(0), r3.get(1));
+            topicToSchemaName.put(r3.get(0), r3.get(1).toLowerCase());
         }
 
         logger.info("get schema from oracledb successfully");

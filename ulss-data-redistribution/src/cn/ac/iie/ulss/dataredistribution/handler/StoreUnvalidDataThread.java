@@ -10,13 +10,14 @@ import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileWriter;
@@ -92,22 +93,31 @@ public class StoreUnvalidDataThread implements Runnable {
                 if (f.exists()) {
                     try {
                         dataFileWriter.appendTo(f);
-                    } catch (IOException ex) {
+                    } catch (Exception ex) {
                         logger.error(ex, ex);
+                        f.delete();
+                        continue;
                     }
                 } else {
-                    try {
-                        logger.info("create the file " + f.getName() + " for the topic " + topic + " and service " + service);
-                        dataFileWriter.create(docsschema, f);
-                    } catch (IOException ex) {
-                        logger.error(ex, ex);
+                    while (true) {
+                        try {
+                            logger.info("create the file " + f.getName() + " for the topic " + topic + " and service " + service);
+                            dataFileWriter.create(docsschema, f);
+                            break;
+                        } catch (Exception ex) {
+                            logger.error(ex, ex);
+                            try {
+                                Thread.sleep(5000);
+                            } catch (Exception ex1) {
+                            }
+                        }
                     }
                 }
 
                 count = 0;
                 while (count < 1000) {
                     count++;
-                    if (!sdQueue.isEmpty()) {   
+                    if (!sdQueue.isEmpty()) {
                         byte[] sendData = pack(sdQueue);
                         if (sendData == null) {
                             continue;
@@ -120,21 +130,21 @@ public class StoreUnvalidDataThread implements Runnable {
                             dxr = dxreader.read(null, dxdecoder);
                             dataFileWriter.append(dxr);
                             dataFileWriter.flush();
-                            logger.info("write unvalid data to the file" + f.getName());
-                        } catch (IOException ex) {
+                            logger.debug("write unvalid data to the file" + f.getName());
+                        } catch (Exception ex) {
                             logger.info("write unvalid data to the file" + f.getName() + " error ");
                             logger.error(ex, ex);
-                            break;
+                            continue;
                         }
                     } else {
                         try {
                             dataFileWriter.flush();
-                        } catch (IOException ex) {
+                        } catch (Exception ex) {
                             logger.error(ex, ex);
                         }
                         try {
                             Thread.sleep(2000);
-                        } catch (InterruptedException ex) {
+                        } catch (Exception ex) {
                             logger.error(ex, ex);
                         }
                     }
@@ -142,7 +152,7 @@ public class StoreUnvalidDataThread implements Runnable {
                 try {
                     dataFileWriter.flush();
                     dataFileWriter.close();
-                } catch (IOException ex) {
+                } catch (Exception ex) {
                     logger.error(ex, ex);
                 }
                 Date d = new Date();
@@ -161,7 +171,7 @@ public class StoreUnvalidDataThread implements Runnable {
                 }
                 try {
                     Thread.sleep(2000);
-                } catch (InterruptedException ex) {
+                } catch (Exception ex) {
                     logger.error(ex, ex);
                 }
             }
@@ -186,7 +196,7 @@ public class StoreUnvalidDataThread implements Runnable {
             if (data != null) {
                 docSet.add(ByteBuffer.wrap(data));
                 count++;
-            }else{
+            } else {
                 try {
                     Thread.sleep(50);
                 } catch (InterruptedException ex) {
@@ -194,11 +204,11 @@ public class StoreUnvalidDataThread implements Runnable {
                 }
             }
         }
-        
+
         if (count <= 0) {
             return null;
         }
- 
+
         docsRecord.put(GlobalVariables.SIGN, "evan");
         docsRecord.put(GlobalVariables.DOC_SET, docSet);
         DatumWriter<GenericRecord> docsWriter = new GenericDatumWriter<GenericRecord>(docs);
@@ -207,7 +217,7 @@ public class StoreUnvalidDataThread implements Runnable {
         try {
             docsWriter.write(docsRecord, docsbe);
             docsbe.flush();
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             logger.error(ex, ex);
         }
 

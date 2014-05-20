@@ -11,7 +11,6 @@ import cn.ac.iie.ulss.dataredistribution.consistenthashing.MD5NodeLocator;
 import cn.ac.iie.ulss.dataredistribution.dao.SimpleDaoImpl;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.DynamicAllocate;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.NodeLocator;
-import cn.ac.iie.ulss.dataredistribution.tools.MessageTransferStation;
 import cn.ac.iie.ulss.dataredistribution.tools.MetaStoreClientPool;
 import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.text.SimpleDateFormat;
@@ -19,10 +18,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -40,62 +37,37 @@ import org.apache.log4j.PropertyConfigurator;
  */
 public class GetRuleFromDB {
 
+    Map<String, Integer> topicToAcceptPoolSize = null;
+    Map<String, Integer> ruleToSendPoolSize = null;
     String time = null;
     ConcurrentHashMap<String, ArrayList<Rule>> topicToRules = null;
     ArrayList<String> transmitrule = null;
     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss");
     private SimpleDaoImpl simpleDao = null;
     int attempSize = 1;
-    static Logger logger = null;
+    Logger logger = null;
 
-    static {
+    {
         PropertyConfigurator.configure("log4j.properties");
         logger = Logger.getLogger(GetRuleFromDB.class.getName());
     }
 
-    public void start() {
+    public GetRuleFromDB() {
+        topicToAcceptPoolSize = (Map<String, Integer>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_ACCEPTPOOLSIZE);
+        ruleToSendPoolSize = (Map<String, Integer>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_SENDPOOLSIZE);
         topicToRules = (ConcurrentHashMap<String, ArrayList<Rule>>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_RULES);
         transmitrule = (ArrayList<String>) RuntimeEnv.getParam(GlobalVariables.TRANSMITRULE);
-
-        getRules(); //get rules from the oracle
-
-        MessageTransferStation.init(topicToRules); // initialise the message transfer station 
-
-        Set topicset = topicToRules.keySet();
-        String topickey = null;
-        for (Iterator it = topicset.iterator(); it.hasNext();) {
-            topickey = (String) it.next();
-            TopicThread topicthread = new TopicThread(topickey); // starting the transmit server by topic 
-            Thread tt = new Thread(topicthread);
-            tt.setName("TopicThread-" + topickey);
-            tt.start();
-        }
-
-        GetMessageFromMetaStore gmfms = new GetMessageFromMetaStore(); // getting the change message from the metastore
-        Thread tgmfms = new Thread(gmfms);
-        tgmfms.setName("GetMessageFromMetaStore");
-        tgmfms.start();
-
-//        DetectTransmitRule dtr = new DetectTransmitRule();
-//        Thread tdtr = new Thread(dtr);
-//        tdtr.setName("DetectTransmitRule");
-//        tdtr.start();
-
-        CountThread act = new CountThread();
-        Thread tact = new Thread(act);
-        tact.setName("AcceptCountThread");
-        tact.start();
     }
 
     /**
      *
      * get rules from the oracle
      */
-    private void getRules() {
+    public void getRules() {
         logger.info("getting data transmit rule from oracle...");
         String dbCluster = (String) RuntimeEnv.getParam(RuntimeEnv.DB_CLUSTER);
         simpleDao = SimpleDaoImpl.getDaoInstance(dbCluster);
-        String sql = "select data_transmitrule.topic,data_transmitrule.service,data_transmitrule.nodeurls,data_transmitrule.type_t,data_transmitrule.keywords,data_transmitrule.filters,data_transmitrule.group_t,dataschema_mq.region  from data_transmitrule,dataschema_mq where data_transmitrule.topic=dataschema_mq.mq";//datatransmit_rules";
+        String sql = "select data_transmitrule.topic,data_transmitrule.service,data_transmitrule.nodeurls,data_transmitrule.type_t,data_transmitrule.keywords,data_transmitrule.filters,data_transmitrule.group_t,dataschema_mq.region,data_transmitrule.acceptpoolsize,data_transmitrule.sendpoolsize  from data_transmitrule,dataschema_mq where data_transmitrule.topic=dataschema_mq.mq";//datatransmit_rules";
         List<List<String>> newRs = simpleDao.queryForList(sql);
         String[] re = ((String) RuntimeEnv.getParam(RuntimeEnv.REGION)).split("\\|");
         List<String> regions = Arrays.asList(re);
@@ -172,6 +144,30 @@ public class GetRuleFromDB {
                     region = region.trim();
                 }
 
+                int acceptPoolSize = -1;
+                try {
+                    acceptPoolSize = Integer.parseInt(r.get(8));
+                    if (acceptPoolSize < 0) {
+                        logger.error("the acceptpoolsize in the rule is wrong ! " + acceptPoolSize );
+                        continue;
+                    }
+                } catch (Exception e) {
+                    logger.error("the acceptpoolsize in the rule is null or wrong " + topic + e, e);
+                    continue;
+                }
+
+                int sendPoolSize = -1;
+                try {
+                    sendPoolSize = Integer.parseInt(r.get(9));
+                    if (sendPoolSize < 0) {
+                        logger.error("the sendpoolsize in the rule is wrong !" + sendPoolSize );
+                        continue;
+                    }
+                } catch (Exception e) {
+                    logger.error("the sendpoolsize in the rule is null or wrong " + topic + e, e);
+                    continue;
+                }
+
                 MD5NodeLocator nodelocator = null;
                 String[] IPList = null;
                 Map<RNode, String> nodeToIP = new HashMap<RNode, String>();
@@ -194,8 +190,9 @@ public class GetRuleFromDB {
                         nodelocator = dynamicallocate.getMD5NodeLocator();
 
                         Rule s = new Rule(topic, serviceName, nurl, type, keywords, filters, nodelocator, IPList, nodeToIP, deadIP, partType);
-                        logger.info(dateFormat.format(new Date()) + " this rule is useful " + topic + " " + serviceName + " " + type + " " + keywords + " " + filters);
-
+                        logger.info(dateFormat.format(new Date()) + " this rule is useful " + topic + " " + serviceName + " " + type + " " + keywords + " " + filters + " " + acceptPoolSize + " " + sendPoolSize);
+                        topicToAcceptPoolSize.put(topic, acceptPoolSize);
+                        ruleToSendPoolSize.put(topic + serviceName, sendPoolSize);
                         if (topicToRules.containsKey(topic)) {
                             ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(topic);
                             set.add(s);
@@ -204,7 +201,7 @@ public class GetRuleFromDB {
                             set.add(s);
                             topicToRules.put(topic, set);
                         }
-                    }else{
+                    } else {
                         logger.info("this rule's region will be not in the regions " + region);
                     }
                 } else if (type == 4) {
@@ -214,7 +211,9 @@ public class GetRuleFromDB {
 
                         if (s != null) {
                             transmitrule.add(topic + serviceName);
-                            logger.info(dateFormat.format(new Date()) + " this rule is useful " + topic + " " + serviceName + " " + s.getPartType() + " " + s.getNodeUrls().size());
+                            logger.info(dateFormat.format(new Date()) + " this rule is useful " + topic + " " + serviceName + " " + s.getPartType() + " " + s.getNodeUrls().size() + " " + acceptPoolSize + " " + sendPoolSize);
+                            topicToAcceptPoolSize.put(topic, acceptPoolSize);
+                            ruleToSendPoolSize.put(topic + serviceName, sendPoolSize);
                             if (topicToRules.containsKey(topic)) {
                                 ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(topic);
                                 set.add(s);

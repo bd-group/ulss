@@ -11,8 +11,6 @@ import cn.ac.iie.ulss.dataredistribution.consistenthashing.MD5NodeLocator;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.NodeLocator;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
 import cn.ac.iie.ulss.dataredistribution.dao.SimpleDaoImpl;
-import cn.ac.iie.ulss.dataredistribution.tools.HttpConnectionManager;
-import cn.ac.iie.ulss.dataredistribution.tools.MessageTransferStation;
 import cn.ac.iie.ulss.dataredistribution.tools.MetaStoreClientPool;
 import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.util.ArrayList;
@@ -29,7 +27,6 @@ import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
-import org.apache.http.client.HttpClient;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
@@ -88,15 +85,15 @@ class DetectTransmitRule implements Runnable {
                 logger.info("the transmitrule from the oracle is not changed");
             }
 
-            if (!addrule.isEmpty()) {
-                logger.info("need to add new rule to the existed topic");
-                addRuleToTopic(addrule);
-            }
-
-            if (!addtopic.isEmpty()) {
-                logger.info("need to add new topic");
-                addTopic(addtopic);
-            }
+//            if (!addrule.isEmpty()) {
+//                logger.info("need to add new rule to the existed topic");
+//                addRuleToTopic(addrule);
+//            }
+//
+//            if (!addtopic.isEmpty()) {
+//                logger.info("need to add new topic");
+//                addTopic(addtopic);
+//            }
         }
     }
 
@@ -183,55 +180,55 @@ class DetectTransmitRule implements Runnable {
         return rs;
     }
 
-    private void addRuleToTopic(List<List<String>> addrule) {
-        ArrayList<Rule> newrule = getRules(addrule);
+//    private void addRuleToTopic(List<List<String>> addrule) {
+//        ArrayList<Rule> newrule = getRules(addrule);
+//
+//        for (Rule r : newrule) {
+//            MessageTransferStation.addRule(r);
+//            ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(r.getTopic());
+//            synchronized (set) {
+//                set.add(r);
+//            }
+//        }
+//    }
 
-        for (Rule r : newrule) {
-            MessageTransferStation.addRule(r);
-            ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(r.getTopic());
-            synchronized (set) {
-                set.add(r);
-            }
-        }
-    }
-
-    private void addTopic(List<List<String>> addtopic) {
-        ArrayList<Rule> newrule = getRules(addtopic);
-
-        for (Rule r : newrule) {
-            if (topicToRules.containsKey(r.getTopic())) {
-                MessageTransferStation.addRule(r);
-                ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(r.getTopic());
-                synchronized (set) {
-                    set.add(r);
-                }
-            } else {
-                Map<String, ThreadGroup> topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
-                ThreadGroup sendThreadPool = new ThreadGroup(r.getTopic());
-                topicToSendThreadPool.put(r.getTopic(), sendThreadPool);
-                ArrayList<RNode> alr = new ArrayList<RNode>();
-                topicToNodes.put(r.getTopic(), alr);
-
-                MessageTransferStation.addRule(r);
-                ArrayList<Rule> set = new ArrayList<Rule>();
-                set.add(r);
-                topicToRules.put(r.getTopic(), set);
-
-                ConcurrentHashMap<String, AtomicLong> topicToAcceptCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_ACCEPTCOUNT);
-                AtomicLong acceptCount = new AtomicLong(0);
-                topicToAcceptCount.put(r.getTopic(), acceptCount);
-
-                int sendThreadPoolSize = (Integer) RuntimeEnv.getParam(RuntimeEnv.SEND_THREAD_POOL_SIZE);
-                Map<String, HttpClient> topicToHttpclient = (Map<String, HttpClient>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_HTTPCLIENT);
-                HttpClient httpclient = HttpConnectionManager.getHttpClient(sendThreadPoolSize);
-                topicToHttpclient.put(r.getTopic(), httpclient);
-
-                TopicThread topicthread = new TopicThread(r.getTopic()); // starting the transmit server by topic 
-                Thread tt = new Thread(topicthread);
-                tt.start();
-            }
-        }
-    }
+//    private void addTopic(List<List<String>> addtopic) {
+//        ArrayList<Rule> newrule = getRules(addtopic);
+//
+//        for (Rule r : newrule) {
+//            if (topicToRules.containsKey(r.getTopic())) {
+//                MessageTransferStation.addRule(r);
+//                ArrayList<Rule> set = (ArrayList<Rule>) topicToRules.get(r.getTopic());
+//                synchronized (set) {
+//                    set.add(r);
+//                }
+//            } else {
+//                Map<String, ThreadGroup> topicToSendThreadPool = (Map<String, ThreadGroup>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SEND_THREADPOOL);
+//                ThreadGroup sendThreadPool = new ThreadGroup(r.getTopic());
+//                topicToSendThreadPool.put(r.getTopic(), sendThreadPool);
+//                ArrayList<RNode> alr = new ArrayList<RNode>();
+//                topicToNodes.put(r.getTopic(), alr);
+//
+//                MessageTransferStation.addRule(r);
+//                ArrayList<Rule> set = new ArrayList<Rule>();
+//                set.add(r);
+//                topicToRules.put(r.getTopic(), set);
+//
+//                ConcurrentHashMap<String, AtomicLong> topicToAcceptCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_ACCEPTCOUNT);
+//                AtomicLong acceptCount = new AtomicLong(0);
+//                topicToAcceptCount.put(r.getTopic(), acceptCount);
+//
+//                int sendThreadPoolSize = (Integer) RuntimeEnv.getParam(RuntimeEnv.SEND_THREAD_POOL_SIZE);
+//                Map<String, HttpClient> topicToHttpclient = (Map<String, HttpClient>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_HTTPCLIENT);
+//                HttpClient httpclient = HttpConnectionManager.getHttpClient(sendThreadPoolSize);
+//                topicToHttpclient.put(r.getTopic(), httpclient);
+//
+//                TopicThread topicthread = new TopicThread(r.getTopic()); // starting the transmit server by topic 
+//                Thread tt = new Thread(topicthread);
+//                tt.start();
+//            }
+//        }
+//    }
 
     /**
      *

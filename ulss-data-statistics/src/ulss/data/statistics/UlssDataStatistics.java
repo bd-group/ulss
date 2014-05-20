@@ -206,7 +206,7 @@ public class UlssDataStatistics {
                 String fb = format.format(date) + "_" + f.getName();
 
                 if (f.exists()) {
-                    f.renameTo(new File(dataDir + "/" + fb));
+                    f.renameTo(new File(dataDir + "/" + fb + ".old"));
                 }
             }
         });

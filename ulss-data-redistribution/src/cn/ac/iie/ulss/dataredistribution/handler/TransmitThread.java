@@ -8,7 +8,6 @@ import cn.ac.iie.ulss.dataredistribution.consistenthashing.NodeLocator;
 import cn.ac.iie.ulss.dataredistribution.tools.MessageTransferStation;
 import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -42,29 +41,24 @@ public class TransmitThread implements Runnable {
     String topic = null;
     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss");
     Schema msgSchema = null;
-//    Schema docsSchema = null;
-//    DatumReader<GenericRecord> docsreader = null;
     DatumReader<GenericRecord> msgreader = null;
-//    ByteArrayInputStream docsin = null;
-//    BinaryDecoder docsdecoder = null;
-//    GenericRecord docsGr = null;
     GenericArray msgSet = null;
     Iterator<ByteBuffer> msgitor = null;
     ConcurrentLinkedQueue dataPool = null;
     MD5NodeLocator nodelocator = null;
     String reader = null;
-//    String docsSchemaContent = null;
     String msgSchemaContent = null;
     String msgSchemaName = null;
-//    Protocol protocoldocs = null;
     Protocol protocolMsg = null;
     Map<RNode, Object> sendRows = null;
-    Integer sendPoolSize = 0;
     String timefilter = null;
     int fstime = 30;
     int fetime = 37;
     int timefilterfile = 0;
+    int filterfile = 0;
+    int blankand0 = 0;
     ConcurrentHashMap<String, AtomicLong> ruleToFilterCount = null;
+    Map<String, Integer> ruleToSendPoolSize = null;
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -93,9 +87,9 @@ public class TransmitThread implements Runnable {
             } else {
                 logger.debug("dataPool for the topic " + topic + " is empty !");
                 try {
-                    Thread.sleep(500);
-                } catch (InterruptedException ex) {
-                    logger.info(ex, ex);
+                    Thread.sleep(200);
+                } catch (Exception ex) {
+                    //logger.info(ex, ex);
                 }
             }
         }
@@ -106,54 +100,55 @@ public class TransmitThread implements Runnable {
      * init the environment
      */
     private void init() {
-        sendPoolSize = (Integer) RuntimeEnv.getParam(RuntimeEnv.SEND_POOL_SIZE);
         msgSchemaContent = ((Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SCHEMACONTENT)).get(topic);
-//        docsSchemaContent = (String) RuntimeEnv.getParam(GlobalVariables.DOCS_SCHEMA_CONTENT);
         msgSchemaName = ((Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SCHEMANAME)).get(topic);
-//        protocoldocs = Protocol.parse(docsSchemaContent);
-//        docsSchema = protocoldocs.getType(GlobalVariables.DOCS);
-//        docsreader = new GenericDatumReader<GenericRecord>(docsSchema);
         protocolMsg = Protocol.parse(msgSchemaContent);
         sendRows = MessageTransferStation.getMessageTransferStation();
         timefilter = (String) RuntimeEnv.getParam(RuntimeEnv.TIME_FILTER);
         fstime = Integer.parseInt(timefilter.split("\\|")[0]);
         fetime = Integer.parseInt(timefilter.split("\\|")[1]) + fstime;
         timefilterfile = (Integer) RuntimeEnv.getParam(RuntimeEnv.TIME_FILTER_FILE);
+        filterfile = (Integer) RuntimeEnv.getParam(RuntimeEnv.FILTER_FILE);
         ruleToFilterCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_FILTERCOUNT);
+        ruleToSendPoolSize = (Map<String, Integer>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_SENDPOOLSIZE);
+        blankand0 = (Integer) RuntimeEnv.getParam(RuntimeEnv.BLANKAND0);
     }
 
     /**
      *
      * Split and send the message to the transfer station
      */
-    public void dataSplitAndSend() throws InterruptedException, Exception {
+    public void dataSplitAndSend() {
         logger.debug("begining the dataSplit  message from " + topic + " and send to the transfer station ");
         byte[] data = null;
+        GenericRecord msgRecord = null;
+        ByteArrayInputStream msgbis = null;
+        BinaryDecoder msgbd = null;
         while ((data = (byte[]) dataPool.poll()) != null) {
             msgSchema = protocolMsg.getType(msgSchemaName);
             msgreader = new GenericDatumReader<GenericRecord>(msgSchema);
-
-            ByteArrayInputStream msgbis = new ByteArrayInputStream(data);
-            BinaryDecoder msgbd = new DecoderFactory().binaryDecoder(msgbis, null);
-            GenericRecord msgRecord = null;
+            msgbis = new ByteArrayInputStream(data);
+            msgbd = new DecoderFactory().binaryDecoder(msgbis, null);
             try {
                 msgRecord = msgreader.read(null, msgbd);
-            } catch (IOException ex) {
-                logger.info("split the one data from the topic " + topic + " in the dataPool wrong " + ex, ex);
+            } catch (Exception ex) {
+                logger.debug("split the one data from the topic " + topic + " in the dataPool wrong " + ex, ex);
                 storeUselessData(topic, data);
                 continue;
             }
+
             for (Rule rule : ruleSet) {
+                int maxsize = ruleToSendPoolSize.get(rule.getTopic() + rule.getServiceName()) * 10;
                 if (rule.getType() == 0) {
-                    sendToType0(rule, data);
+                    sendToType0(rule, data, maxsize);
                 } else if (rule.getType() == 1) {
-                    sendToType1(rule, data, msgRecord);
+                    sendToType1(rule, data, msgRecord, maxsize);
                 } else if (rule.getType() == 2) {
-                    sendToType2(rule, data, msgRecord);
+                    sendToType2(rule, data, msgRecord, maxsize);
                 } else if (rule.getType() == 3) {
-                    sendToType3(rule, data, msgRecord);
+                    sendToType3(rule, data, msgRecord, maxsize);
                 } else if (rule.getType() == 4) {
-                    sendToType4(rule, data, msgRecord);
+                    sendToType4(rule, data, msgRecord, maxsize);
                 } else {
                     logger.info("one rule is wrong because it's type is not 01234");
                 }
@@ -165,21 +160,28 @@ public class TransmitThread implements Runnable {
      *
      * send message whose type is 0
      */
-    private void sendToType0(Rule rule, byte[] data) {
+    private void sendToType0(Rule rule, byte[] data, int maxsize) {
         String randomstring = generateString(10);
         while (true) {
             NodeLocator n0 = rule.getNodelocator();
             if (n0.getNodesNum() > 0) {
                 RNode node = n0.getPrimary(randomstring);
                 ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                while (clq.size() > maxsize) {
+                    logger.info("the clq for " + topic + " " + rule.getServiceName() + " " + node.getName() + " is full");
+                    try {
+                        Thread.sleep(200);
+                    } catch (Exception ex) {
+                        //do nothing
+                    }
+                }
                 clq.offer(data);
                 break;
             } else {
-//            storeStrandedData(rule, data);
-                logger.error("There is no node for the " + topic + " " + rule.getServiceName());
+                logger.info("There is no node for the " + topic + " " + rule.getServiceName());
                 try {
                     Thread.sleep(2000);
-                } catch (InterruptedException ex) {
+                } catch (Exception ex) {
                     //do nothing
                 }
             }
@@ -190,7 +192,7 @@ public class TransmitThread implements Runnable {
      *
      * send message whose type is 1
      */
-    private void sendToType1(Rule rule, byte[] data, GenericRecord record) {
+    private void sendToType1(Rule rule, byte[] data, GenericRecord record, int maxsize) {
         String[] keywords = (rule.getKeywords()).split("\\;");
         StringBuilder sb = new StringBuilder();
         for (String s : keywords) {
@@ -202,18 +204,36 @@ public class TransmitThread implements Runnable {
         }
 
         while (true) {
-            NodeLocator n = rule.getNodelocator();
-            if (n.getNodesNum() > 0) {
-                RNode node = n.getPrimary(sb.toString());
+            NodeLocator n1 = rule.getNodelocator();
+            if (n1.getNodesNum() > 0) {
+                RNode node = null;
+                if (blankand0 == 1) {
+                    if (sb.toString() == null || sb.toString().equals("") || sb.toString().equals("0")) {
+                        String randomstring = generateString(10);
+                        node = n1.getPrimary(randomstring);
+                    } else {
+                        node = n1.getPrimary(sb.toString());
+                    }
+                } else {
+                    node = n1.getPrimary(sb.toString());
+                }
+
                 ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                while (clq.size() > maxsize) {
+                    logger.info("the clq for " + topic + " " + rule.getServiceName() + " " + node.getName() + " is full");
+                    try {
+                        Thread.sleep(200);
+                    } catch (Exception ex) {
+                        //do nothing
+                    }
+                }
                 clq.offer(data);
                 break;
             } else {
-//                storeStrandedData(rule, data);
-                logger.error("There is no node for the " + topic + " " + rule.getServiceName());
+                logger.info("There is no node for the " + topic + " " + rule.getServiceName());
                 try {
                     Thread.sleep(2000);
-                } catch (InterruptedException ex) {
+                } catch (Exception ex) {
                     //do nothing
                 }
             }
@@ -224,7 +244,7 @@ public class TransmitThread implements Runnable {
      *
      * send message whose type is 2
      */
-    private void sendToType2(Rule rule, byte[] data, GenericRecord record) {
+    private void sendToType2(Rule rule, byte[] data, GenericRecord record, int maxsize) {
         String f = rule.getFilters();
         if (!isTrue(f, record)) {
             while (true) {
@@ -233,11 +253,18 @@ public class TransmitThread implements Runnable {
                     String randomstring = generateString(10);
                     RNode node = n.getPrimary(randomstring);
                     ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                    while (clq.size() > maxsize) {
+                        logger.info("the clq for " + topic + " " + rule.getServiceName() + " " + node.getName() + " is full");
+                        try {
+                            Thread.sleep(200);
+                        } catch (Exception ex) {
+                            //do nothing
+                        }
+                    }
                     clq.offer(data);
                     break;
                 } else {
-//                    storeStrandedData(rule, data);
-                    logger.error("There is no node for the " + topic + " " + rule.getServiceName());
+                    logger.info("There is no node for the " + topic + " " + rule.getServiceName());
                     try {
                         Thread.sleep(2000);
                     } catch (InterruptedException ex) {
@@ -245,6 +272,12 @@ public class TransmitThread implements Runnable {
                     }
                 }
             }
+        } else {
+            if (filterfile == 1) {
+                storeUnvalidData(rule, data);
+            }
+            AtomicLong al = ruleToFilterCount.get(rule.getTopic() + rule.getServiceName() + rule.getFilters());
+            al.incrementAndGet();
         }
     }
 
@@ -252,7 +285,7 @@ public class TransmitThread implements Runnable {
      *
      * send message whose type is 3
      */
-    private void sendToType3(Rule rule, byte[] data, GenericRecord record) {
+    private void sendToType3(Rule rule, byte[] data, GenericRecord record, int maxsize) {
         String[] keywords = (rule.getKeywords()).split("\\;");
         String f = rule.getFilters();
         if (!isTrue(f, record)) {
@@ -267,20 +300,44 @@ public class TransmitThread implements Runnable {
                             sb.append((record.get(ss.toLowerCase())).toString());
                         }
                     }
-                    RNode node = n3.getPrimary(sb.toString());
+                    RNode node = null;
+                    if (blankand0 == 1) {
+                        if (sb.toString() == null || sb.toString().equals("") || sb.toString().equals("0")) {
+                            String randomstring = generateString(10);
+                            node = n3.getPrimary(randomstring);
+                        } else {
+                            node = n3.getPrimary(sb.toString());
+                        }
+                    } else {
+                        node = n3.getPrimary(sb.toString());
+                    }
+
                     ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
+                    while (clq.size() > maxsize) {
+                        logger.info("the clq for " + topic + " " + rule.getServiceName() + " " + node.getName() + " is full");
+                        try {
+                            Thread.sleep(200);
+                        } catch (Exception ex) {
+                            //do nothing
+                        }
+                    }
                     clq.offer(data);
                     break;
                 } else {
-//                    storeStrandedData(rule, data
-                    logger.error("There is no node for the " + topic + " " + rule.getServiceName());
+                    logger.info("There is no node for the " + topic + " " + rule.getServiceName());
                     try {
                         Thread.sleep(2000);
-                    } catch (InterruptedException ex) {
+                    } catch (Exception ex) {
                         //do nothing
                     }
                 }
             }
+        } else {
+            if (filterfile == 1) {
+                storeUnvalidData(rule, data);
+            }
+            AtomicLong al = ruleToFilterCount.get(rule.getTopic() + rule.getServiceName() + rule.getFilters());
+            al.incrementAndGet();
         }
     }
 
@@ -288,7 +345,7 @@ public class TransmitThread implements Runnable {
      *
      * send message whose type is 4
      */
-    private void sendToType4(Rule rule, byte[] data, GenericRecord record) {
+    private void sendToType4(Rule rule, byte[] data, GenericRecord record, int maxsize) {
         String[] pt = rule.getPartType().split("\\|");
         if (pt.length == 7) {
             String[] keywords = (rule.getKeywords()).split("\\|");
@@ -312,7 +369,11 @@ public class TransmitThread implements Runnable {
                 String interval = (rule.getPartType().split("\\|"))[4];
                 keyinterval = getKeyInterval(time, unit, interval);
             } catch (Exception e) {
-                storeUnvalidData(rule, data);
+                if (timefilterfile == 1) {
+                    storeUnvalidData(rule, data);
+                }
+                AtomicLong al = ruleToFilterCount.get(rule.getTopic() + rule.getServiceName() + "timeparsewrong");
+                al.incrementAndGet();
                 logger.error(e, e);
             }
 
@@ -327,20 +388,28 @@ public class TransmitThread implements Runnable {
                 if (timefilterfile == 1) {
                     storeUnvalidData(rule, data);
                 }
-                AtomicLong al = ruleToFilterCount.get(rule.getTopic()+rule.getServiceName());
+                AtomicLong al = ruleToFilterCount.get(rule.getTopic() + rule.getServiceName() + timefilter);
                 al.incrementAndGet();
                 logger.debug("the time in the message for " + topic + " " + rule.getServiceName() + " is wrong because its time is " + time + " and interval is " + keyinterval);
                 return;
             }
 
-            synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_MESSAGETRANSFERSTATION)) {
+            synchronized (chm) {
                 ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) chm.get(keyinterval);
                 if (clq != null) {
+                    while (clq.size() > maxsize) {
+                        logger.info("the clq for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName() + " is full");
+                        try {
+                            Thread.sleep(200);
+                        } catch (Exception ex) {
+                            //do nothing
+                        }
+                    }
                     clq.offer(data);
                 } else {
                     logger.info("create a abq for " + topic + " " + rule.getServiceName() + " " + keyinterval + " " + node.getName());
-                    GetFileFromMetaStore gffm = new GetFileFromMetaStore(keyinterval, node, rule);
-                    gffm.getFileForInverval();
+//                    GetFileFromMetaStore gffm = new GetFileFromMetaStore(keyinterval, node, rule);
+//                    gffm.getFileForInverval();
                     int datasendertsize = (Integer) RuntimeEnv.getParam(RuntimeEnv.DATASENDER_THREAD);
                     clq = new ConcurrentLinkedQueue();
                     clq.offer(data);
@@ -376,14 +445,14 @@ public class TransmitThread implements Runnable {
      * judge the string is valid or not , return the true if is valid , or
      * return false
      */
-    private boolean isTrue(String s, GenericRecord dxxRecord) {
+    private boolean isTrue(String s, GenericRecord record) {
         if ((!s.contains("|")) && (!s.contains("&"))) {
             if (!s.contains("=") && !s.contains("!")) {
                 logger.error("the rule's fileter is wrong");
                 return true;
             } else if (s.contains("=")) {
                 String[] ss = s.split("\\=");
-                String key = (dxxRecord.get(ss[0].toLowerCase())).toString();
+                String key = (record.get(ss[0].toLowerCase())).toString();
                 if (ss.length == 2) {
                     if (key == null ? ss[1] == null : key.equals(ss[1])) {
                         return true;
@@ -399,7 +468,7 @@ public class TransmitThread implements Runnable {
                 }
             } else {
                 String[] ss = s.split("\\!");
-                String key = (dxxRecord.get(ss[0].toLowerCase())).toString();
+                String key = (record.get(ss[0].toLowerCase())).toString();
                 if (ss.length == 2) {
                     if (key == null ? ss[1] == null : key.equals(ss[1])) {
                         return false;
@@ -417,7 +486,7 @@ public class TransmitThread implements Runnable {
         } else if (s.contains("|")) {
             String[] sr = s.split("\\|");
             for (int i = 0; i < sr.length; i++) {
-                if (isTrue(sr[i], dxxRecord)) {
+                if (isTrue(sr[i], record)) {
                     return true;
                 }
             }
@@ -425,7 +494,7 @@ public class TransmitThread implements Runnable {
         } else if (s.contains("&")) {
             String[] sc = s.split("\\&");
             for (int i = 0; i < sc.length; i++) {
-                if (!isTrue(sc[i], dxxRecord)) {
+                if (!isTrue(sc[i], record)) {
                     return false;
                 }
             }

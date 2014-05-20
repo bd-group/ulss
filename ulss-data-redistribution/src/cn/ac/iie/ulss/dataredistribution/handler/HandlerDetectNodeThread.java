@@ -25,7 +25,6 @@ public class HandlerDetectNodeThread implements Runnable {
         PropertyConfigurator.configure("log4j.properties");
         logger = org.apache.log4j.Logger.getLogger(HandlerDetectNodeThread.class.getName());
     }
-    private Iterable<RNode> key;
 
     public HandlerDetectNodeThread(ConcurrentLinkedQueue<Object[]> detectNodeList) {
         this.detectNodeList = detectNodeList;
@@ -41,8 +40,8 @@ public class HandlerDetectNodeThread implements Runnable {
             if (detectNodeList.isEmpty()) {
                 try {
                     Thread.sleep(10000);
-                } catch (InterruptedException ex) {
-                    logger.error(ex, ex);
+                } catch (Exception ex) {
+                    //logger.error(ex, ex);
                 }
             } else {
                 Object[] o = detectNodeList.poll();
@@ -55,6 +54,7 @@ public class HandlerDetectNodeThread implements Runnable {
 
                     synchronized (GlobalVariables.SYN_DETECT_NODE) {
                         if (!detectNode.contains(n)) {
+                            detectNode.add(n);
                             DetectNodeThread d = new DetectNodeThread(n, r, data);
                             Thread td = new Thread(d);
                             td.start();

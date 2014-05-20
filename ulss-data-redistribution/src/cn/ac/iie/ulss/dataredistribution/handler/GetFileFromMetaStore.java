@@ -28,7 +28,8 @@ import org.apache.hadoop.hive.metastore.api.NodeGroup;
 import org.apache.hadoop.hive.metastore.api.SFile;
 import org.apache.hadoop.hive.metastore.api.SplitValue;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
-import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.util.EntityUtils;
 import org.apache.log4j.PropertyConfigurator;
 
 /**
@@ -50,12 +51,12 @@ public class GetFileFromMetaStore {
     private static final int ZOOKEEPER_RETRY_INIT = 2000;
     public static AtomicLong HANDLER_CLIENT_SIZE = new AtomicLong(0);
     private static final int CREATEFILE_RETRY_INIT = 2000;
-    private static MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
-    private static ConcurrentHashMap<String, Object[]> valueToFile = (ConcurrentHashMap<String, Object[]>) RuntimeEnv.getParam(GlobalVariables.VALUE_TO_FILE);
+    private MetaStoreClientPool mscp = (MetaStoreClientPool) RuntimeEnv.getParam(GlobalVariables.METASTORE_CLIENT_POOL);
+    private ConcurrentHashMap<String, Object[]> valueToFile = (ConcurrentHashMap<String, Object[]>) RuntimeEnv.getParam(GlobalVariables.VALUE_TO_FILE);
     int attempSize = 1;
-    static org.apache.log4j.Logger logger = null;
+    org.apache.log4j.Logger logger = null;
 
-    static {
+    {
         PropertyConfigurator.configure("log4j.properties");
         logger = org.apache.log4j.Logger.getLogger(GetFileFromMetaStore.class.getName());
     }
@@ -68,7 +69,6 @@ public class GetFileFromMetaStore {
         this.serviceName = rule.getServiceName();
         this.partT = node.getPartType();
         this.keywords = node.getKeywords();
-
     }
 
     /**
@@ -141,7 +141,7 @@ public class GetFileFromMetaStore {
             ob[2] = "";
 
             String zkCluster = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
-            int zkSessionTimeout = 30000;
+            int zkSessionTimeout = 10000;
             ZkClient zk = new ZkClient(zkCluster, zkSessionTimeout);
             int ZKretryInterval = ZOOKEEPER_RETRY_INIT;
             int ZKretryAttempt = 0;
@@ -165,10 +165,11 @@ public class GetFileFromMetaStore {
                     }
                 }
 
-                if (!zk.exists("/ulss/redistribution/" + topic + node.getName() + "lock")) {
+                if (!zk.exists("/ulss/redistribution/" + topic + keyinterval + node.getName() + "lock")) {
                     try {
-                        zk.createEphemeral("/ulss/redistribution/" + topic + node.getName() + "lock", topic + node.getName());
-                        logger.info("new lock " + topic + node.getName() + "lock" + " is created");
+//                        zk.createEphemeral("/ulss/redistribution/" + topic + node.getName() + "lock", topic + node.getName());
+                        zk.createEphemeral("/ulss/redistribution/" + topic + keyinterval + node.getName() + "lock", topic + keyinterval + node.getName());
+                        logger.info("new lock " + topic + keyinterval + node.getName() + "lock" + " is created");
                     } catch (Exception e) {
                         try {
                             Thread.sleep(2000);
@@ -206,10 +207,10 @@ public class GetFileFromMetaStore {
                     }
                 } else {
                     logger.debug("the lock is exists");
-                    if (ZKretryInterval < 30000) {
+                    if (ZKretryInterval < 10000) {
                         ZKretryInterval = ZKretryInterval + ZOOKEEPER_RETRY_INIT;
                     } else {
-                        ZKretryInterval = 30000;
+                        ZKretryInterval = 10000;
                     }
                     logger.info("get the zoookeeper lock " + String.format("On retry attempt %d . Sleeping %d seconds.", ++ZKretryAttempt, ZKretryInterval / 1000));
                     try {
@@ -222,12 +223,12 @@ public class GetFileFromMetaStore {
             zk.close();
             logger.debug("disconnect the zookeeper");
         } else {
-            logger.info("choose the file " + f_id + " to the road " + road + " to the sendIP " + sendIP);
+            logger.debug("choose the file " + f_id + " to the road " + road + " to the sendIP " + sendIP);
         }
 
         synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_VALUE_TO_FILE)) {
             valueToFile.put(topic + keyinterval + node.getName(), ob);
-            logger.info("choose the " + topic + " " + keyinterval + " " + node.getName() + " " + ob[0] + " " + ob[1] + " " + ob[2]);
+            logger.debug("choose the " + topic + " " + keyinterval + " " + node.getName() + " " + ob[0] + " " + ob[1] + " " + ob[2]);
         }
     }
 
@@ -272,7 +273,7 @@ public class GetFileFromMetaStore {
 
                 List<SFile> aolsf = new ArrayList<SFile>();
                 if (!alsf.isEmpty()) {
-                    logger.info("the alsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + alsf.size() + " available file");
+                    logger.debug("the alsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + alsf.size() + " available file");
                     for (SFile s : alsf) {
                         if (s.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
                             aolsf.add(s);
@@ -284,14 +285,14 @@ public class GetFileFromMetaStore {
                     if (!aolsf.isEmpty()) {
                         aomlsf = new SFile();
                         aomlsf.setLength(Long.MAX_VALUE);
-                        logger.info("the aolsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + aolsf.size() + " available and open file");
+                        logger.debug("the aolsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + aolsf.size() + " available and open file");
                         for (SFile s : aolsf) {
                             if (s.getLength() <= aomlsf.getLength()) {
                                 aomlsf = s;
                             }
                         }
 
-                        logger.info("the aomlsf for " + topic + " " + keyinterval + " " + node.getName() + " is " + aomlsf);
+                        logger.debug("the aomlsf for " + topic + " " + keyinterval + " " + node.getName() + " is " + aomlsf);
 
                         if (aomlsf.getLocations() == null) {
                             logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has no locations");
@@ -308,7 +309,7 @@ public class GetFileFromMetaStore {
                                 logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has no location is online");
                             } else {
                                 try {
-                                    getsendIP = aomlsf.getLocations().get(visit).getNode_name() + rule.getIPList()[0];
+                                    getsendIP = aomlsf.getLocations().get(visit).getNode_name();//+ rule.getIPList()[0];
                                     //sendIP = "192.168.1." + aomlsf.getLocations().get(visit).getNode_name().substring(4) + rule.getIPList()[0];
                                     getf_id = aomlsf.getFid();
                                     getroad = aomlsf.getLocations().get(visit).getLocation() + "|" + aomlsf.getLocations().get(visit).getDevid();
@@ -326,13 +327,13 @@ public class GetFileFromMetaStore {
                             }
                         }
                     } else {
-                        logger.info(" the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " has no available and useful file");
+                        logger.debug(" the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " has no available and useful file");
                     }
                 } else {
-                    logger.info(" the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " has no available file");
+                    logger.debug(" the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " has no available file");
                 }
             } else {
-                logger.info("the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " is empty");
+                logger.debug("the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " is empty");
             }
         } finally {
             cli.release();
@@ -382,7 +383,7 @@ public class GetFileFromMetaStore {
 
                 List<SFile> aolsf = new ArrayList<SFile>();
                 if (!alsf.isEmpty()) {
-                    logger.info("the alsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + alsf.size() + " available file");
+                    logger.debug("the alsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + alsf.size() + " available file");
                     for (SFile s : alsf) {
                         if (s.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
                             aolsf.add(s);
@@ -394,7 +395,7 @@ public class GetFileFromMetaStore {
                     while (!aolsf.isEmpty()) {
                         aomlsf = new SFile();
                         aomlsf.setLength(Long.MAX_VALUE);
-                        logger.info("the aolsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + aolsf.size() + " available and open file");
+                        logger.debug("the aolsf for " + topic + " " + keyinterval + " " + node.getName() + " has " + aolsf.size() + " available and open file");
                         for (SFile s : aolsf) {
                             if (s.getLength() <= aomlsf.getLength()) {
                                 aomlsf = s;
@@ -418,13 +419,13 @@ public class GetFileFromMetaStore {
                         }
 
                         if (visit == -1) {
-                            logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has no locations");
+                            logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has no location is online");
                             setBad(icli, aomlsf);
                             aolsf.remove(aomlsf);
                             alsf.remove(aomlsf);
                         } else {
                             try {
-                                getsendIP = aomlsf.getLocations().get(visit).getNode_name() + rule.getIPList()[0];
+                                getsendIP = aomlsf.getLocations().get(visit).getNode_name();//+ rule.getIPList()[0];
                                 //sendIP = "192.168.1." + aomlsf.getLocations().get(visit).getNode_name().substring(4) + rule.getIPList()[0];
                                 getf_id = aomlsf.getFid();
                                 getroad = aomlsf.getLocations().get(visit).getLocation() + "|" + aomlsf.getLocations().get(visit).getDevid();
@@ -447,7 +448,7 @@ public class GetFileFromMetaStore {
                     }
 
                     if (getsendIP == null || getf_id == 0L || getroad == null || getsendIP.equals("") || getroad.equals("") || getsendIP == "" || getroad == "") {
-                        logger.info("the SFileList for " + topic + " " + keyinterval + " " + node.getName() + "has no available and open and useful file");
+                        logger.debug("the SFileList for " + topic + " " + keyinterval + " " + node.getName() + "has no available and open and useful file");
                         getsendIP = "";
                         getf_id = 0L;
                         getroad = "";
@@ -459,7 +460,7 @@ public class GetFileFromMetaStore {
                         }
 
                         while (alsf.size() > 1) {
-                            logger.info("the alsf for " + topic + " " + keyinterval + " " + node.getName() + "has " + alsf.size() + " available and not open file");
+                            logger.debug("the alsf for " + topic + " " + keyinterval + " " + node.getName() + "has " + alsf.size() + " available and not open file");
                             aomlsf = new SFile();
                             aomlsf.setLength(Long.MAX_VALUE);
 
@@ -491,7 +492,7 @@ public class GetFileFromMetaStore {
 //                                                }
                                             }
                                         }
-                                        logger.info(time + " reopen the file for " + topic + " " + keyinterval + " " + node.getName() + " " + aomlsf + " successfully");
+                                        logger.info(time + " reopen the file for " + topic + " " + keyinterval + " " + node.getName() + " " + aomlsf + " successfully ");
                                         break;
                                     } else {
                                         logger.info(time + " cannotreopen the file for " + topic + " " + keyinterval + " " + node.getName() + " " + aomlsf);
@@ -528,7 +529,7 @@ public class GetFileFromMetaStore {
                                         alsf.remove(aomlsf);
                                     } else {
                                         try {
-                                            getsendIP = aomlsf.getLocations().get(visit).getNode_name() + rule.getIPList()[0];
+                                            getsendIP = aomlsf.getLocations().get(visit).getNode_name();// + rule.getIPList()[0];
                                             //sendIP = "192.168.1." + aomlsf.getLocations().get(visit).getNode_name().substring(4) + rule.getIPList()[0];
                                             getf_id = aomlsf.getFid();
                                             getroad = aomlsf.getLocations().get(visit).getLocation() + "|" + aomlsf.getLocations().get(visit).getDevid();
@@ -555,17 +556,17 @@ public class GetFileFromMetaStore {
                                 }
                             } else {
                                 alsf.remove(aomlsf);
-                                logger.info("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has not been reopened");
+                                logger.debug("the file " + aomlsf + " for " + topic + " " + keyinterval + " " + node.getName() + " has not been reopened");
                             }
                         }
                     } else {
                         logger.debug("choose the file " + aomlsf + " to the road " + getroad + " to the sendIP " + getsendIP);
                     }
                 } else {
-                    logger.info(" the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " has no available file");
+                    logger.debug(" the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " has no available file");
                 }
             } else {
-                logger.info("the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " is empty");
+                logger.debug("the SFileList for " + topic + " " + keyinterval + " " + node.getName() + " is empty");
             }
         } finally {
             cli.release();
@@ -633,10 +634,10 @@ public class GetFileFromMetaStore {
                     logger.info(time + " begin to create file for " + topic + " " + keyinterval + " " + node.getName() + " " + partT.split("\\|")[0] + " " + partT.split("\\|")[1]);
                     sf2 = icli.create_file_by_policy(cp, 2, partT.split("\\|")[0], partT.split("\\|")[1], list);
                     if (sf2 == null) {
-                        if (CFretryInterval < 30000) {
+                        if (CFretryInterval < 10000) {
                             CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
                         } else {
-                            CFretryInterval = 30000;
+                            CFretryInterval = 10000;
                         }
                         logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
                         try {
@@ -669,10 +670,10 @@ public class GetFileFromMetaStore {
                                 }
                                 continue;
                             }
-                            sendIP = nodeNames.get(ran) + rule.getIPList()[0];
+                            sendIP = nodeNames.get(ran);// + rule.getIPList()[0];
                         }
                     } else {
-                        sendIP = nodeN + rule.getIPList()[0];
+                        sendIP = nodeN;//+ rule.getIPList()[0];
                     }
                     f_id = sf2.getFid();
                     road = sf2.getLocations().get(0).getLocation() + "|" + sf2.getLocations().get(0).getDevid();
@@ -690,114 +691,92 @@ public class GetFileFromMetaStore {
                         continue;
                     }
 
-                    SendCreateFileCMD scfc = new SendCreateFileCMD(sendIP, f_id, road);
-                    HttpResponse hp = scfc.send();
+                    SendCreateFileCMD scfc = new SendCreateFileCMD(sendIP + rule.getIPList()[0], f_id, road);
+                    CloseableHttpResponse hp = scfc.send();
                     if (hp == null) {
-                        logger.error("the file  for " + topic + " " + keyinterval + " " + node.getName() + " " + sf2 + " can not be set online");
+                        logger.error("the file  for " + topic + " " + keyinterval + " " + node.getName() + " " + sf2 + " can not be set online " + sendIP);
                         sendIP = "";
                         f_id = 0L;
                         road = "";
                         setBad(icli, sf2);
 
-                        if (CFretryInterval < 30000) {
+                        if (CFretryInterval < 10000) {
                             CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
                         } else {
-                            CFretryInterval = 30000;
+                            CFretryInterval = 10000;
                         }
                         logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
                         try {
                             Thread.sleep(CFretryInterval);
                         } catch (Exception ex) {
-                            logger.error(ex, ex);
                         }
 
                         continue;
                     } else {
                         logger.debug("sendCreateFileCMD : " + hp.getStatusLine());
-                        if (hp.getStatusLine().getStatusCode() != 200) {
-                            logger.error("the file  for " + topic + " " + keyinterval + " " + node.getName() + " " + sf2 + " can not be set online");
-                            sendIP = "";
-                            f_id = 0L;
-                            road = "";
-                            setBad(icli, sf2);
-
-                            if (CFretryInterval < 30000) {
-                                CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
-                            } else {
-                                CFretryInterval = 30000;
-                            }
-                            logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
-                            try {
-                                Thread.sleep(CFretryInterval);
-                            } catch (Exception ex) {
-                                logger.error(ex, ex);
-                            }
-
-                            continue;
-                        } else {
-                            ByteArrayOutputStream out = new ByteArrayOutputStream();
-                            try {
-                                hp.getEntity().writeTo(out);
-                            } catch (Exception ex) {
-                                logger.error("the file  for " + topic + " " + keyinterval + " " + node.getName() + " " + sf2 + " can not be set online" + hp.getStatusLine() + ex, ex);
+                        try {
+                            if (hp.getStatusLine().getStatusCode() != 200) {
+                                logger.error("the file  for " + topic + " " + keyinterval + " " + node.getName() + " " + sf2 + " can not be set online " + sendIP);
                                 sendIP = "";
                                 f_id = 0L;
                                 road = "";
                                 setBad(icli, sf2);
-                                if (CFretryInterval < 30000) {
+
+                                if (CFretryInterval < 10000) {
                                     CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
                                 } else {
-                                    CFretryInterval = 30000;
-                                }
-                                logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
-
-                                try {
-                                    Thread.sleep(CFretryInterval);
-                                } catch (Exception ex2) {
-                                    logger.error(ex2, ex2);
-                                }
-                                continue;
-                            }
-
-                            String resonseEn = new String(out.toByteArray());
-                            if ("-1".equals(resonseEn.split("[\n]")[0])) {
-                                logger.info(resonseEn.split("[\n]")[1]);
-                                logger.error("the file  for " + topic + " " + keyinterval + " " + node.getName() + " " + sf2 + " can not be set online" + hp.getStatusLine());
-                                sendIP = "";
-                                f_id = 0L;
-                                road = "";
-
-                                setBad(icli, sf2);
-
-                                if (CFretryInterval < 30000) {
-                                    CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
-                                } else {
-                                    CFretryInterval = 30000;
+                                    CFretryInterval = 10000;
                                 }
                                 logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
                                 try {
                                     Thread.sleep(CFretryInterval);
                                 } catch (Exception ex) {
-                                    logger.error(ex, ex);
                                 }
 
                                 continue;
                             } else {
-                                logger.info(time + " this file " + f_id + " " + topic + " " + keyinterval + " " + node.getName() + " " + road + " " + sendIP + " has been set online");
-                                ob[0] = sendIP;
-                                ob[1] = f_id;
-                                ob[2] = road;
-                                break;
+                                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                                hp.getEntity().writeTo(out);
+                                String resonseEn = new String(out.toByteArray());
+                                if ("0".equals(resonseEn.split("[\n]")[0])) {
+                                    logger.info(time + " this file " + f_id + " " + topic + " " + keyinterval + " " + node.getName() + " " + road + " " + sendIP + " has been set online");
+                                    ob[0] = sendIP;
+                                    ob[1] = f_id;
+                                    ob[2] = road;
+                                    break;
+                                } else {
+                                    logger.error("the file  for " + topic + " " + keyinterval + " " + node.getName() + " " + sf2 + " can not be set online " + hp.getStatusLine() + " " + sendIP + " " + resonseEn);
+                                    sendIP = "";
+                                    f_id = 0L;
+                                    road = "";
+                                    setBad(icli, sf2);
+
+                                    if (CFretryInterval < 10000) {
+                                        CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
+                                    } else {
+                                        CFretryInterval = 10000;
+                                    }
+                                    logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
+                                    try {
+                                        Thread.sleep(CFretryInterval);
+                                    } catch (Exception ex) {
+                                        logger.error(ex, ex);
+                                    }
+                                    continue;
+                                }
                             }
+                        } finally {
+                            EntityUtils.consume(hp.getEntity());
+                            hp.close();
                         }
                     }
                 } catch (Exception ex) {
                     logger.error("cannot create the file for " + topic + " " + keyinterval + " " + node.getName() + ex, ex);
                     rcmetastore(icli);
-                    if (CFretryInterval < 30000) {
+                    if (CFretryInterval < 10000) {
                         CFretryInterval = CFretryInterval + CREATEFILE_RETRY_INIT;
                     } else {
-                        CFretryInterval = 30000;
+                        CFretryInterval = 10000;
                     }
                     logger.info("create file for " + topic + " " + keyinterval + " " + node.getName() + String.format(" On retry attempt %d . Sleeping %d seconds.", ++CFretryAttempt, CFretryInterval / 1000));
                     try {
@@ -810,7 +789,7 @@ public class GetFileFromMetaStore {
             }
             Date date = new Date();
             String time = dateFormat2.format(date);
-            logger.info(time + " new useful file for " + topic + " " + keyinterval + " " + node.getName() + " has be created");
+            logger.info(time + " new useful file for " + topic + " " + keyinterval + " " + node.getName() + " has be created " + sendIP);
         } finally {
             cli.release();
         }
@@ -851,10 +830,10 @@ public class GetFileFromMetaStore {
                 icli.reconnect();
                 break;
             } catch (MetaException ex) {
-                if (MSretryInterval <= 30000) {
+                if (MSretryInterval <= 10000) {
                     MSretryInterval = MSretryInterval + METASTORE_RETRY_INIT;
                 } else {
-                    MSretryInterval = 30000;
+                    MSretryInterval = 10000;
                 }
 
                 logger.info("reconnect to the metastore " + String.format("On retry attempt %d . Sleeping %d seconds.", ++MSretryAttempt, MSretryInterval / 1000));

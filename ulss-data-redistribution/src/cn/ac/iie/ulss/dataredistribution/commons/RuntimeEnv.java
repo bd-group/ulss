@@ -15,15 +15,12 @@ public class RuntimeEnv {
 
     public static final String DB_CLUSTER = "dbCluster";
     public static final String ZK_CLUSTER = "zkCluster";
-//    public static final String BUFFER_POOL_SIZE = "bufferPoolSize";
-    public static final String DATA_POOL_SIZE = "dataPoolSize";
-    public static final String SEND_POOL_SIZE = "sendPoolSize";
-//    public static final String WRITE_TO_FILE_THREAD = "writeToFileThread";
+    public static final String MQ_NAME_SERVER = "mqnameserver";
     public static final String TRANSMIT_THREAD = "transmitThread";
     public static final String DATASENDER_THREAD = "datasenderThread";
     public static final String DATASENDER_LIMITTIME = "datasenderLimitTime";
     public static final String SEND_THREAD_POOL_SIZE = "sendThreadPoolSize";
-//    public static final String ACTIVE_THREAD_COUNT = "activeThreadCount";
+    public static final String ACTIVE_THREAD_COUNT = "activeThreadCount";
     public static final String METASTORE_CLIENT = "metaStoreClient";
     public static final String DATA_DIR = "dataDir";
     public static final String METASTORE_CLIENT_POOL_SIZE = "metaStoreClientPoolSize";
@@ -34,6 +31,13 @@ public class RuntimeEnv {
     public static final String TIME_FILTER = "timefilter";
     public static final String PACKAGE_TIMELIMIT = "packagetimelimit";
     public static final String TIME_FILTER_FILE = "timefilterfile";
+    public static final String FILTER_FILE = "filterfile";
+    public static final String HDNDLER_TYPE = "handlertype";
+    public static final String DATA_POOL_COUNT = "datapoolcount";
+    public static final String MQ_FETCH_RUNNER_SIZE = "mqfetchrunnersize";
+    public static final String NODENAME = "nodename";
+    public static final String RMQGROUP = "rmqgroup";
+    public static final String BLANKAND0 = "blankand0";
     private static Map<String, Object> dynamicParams = new HashMap<String, Object>();
     private static Configuration conf = null;
     static Logger logger = null;
@@ -71,37 +75,13 @@ public class RuntimeEnv {
         logger.info("get zkCluster " + zkCluster);
         dynamicParams.put(ZK_CLUSTER, zkCluster);
 
-//        int bufferPoolSize = conf.getInt(BUFFER_POOL_SIZE, 100);
-//        if (bufferPoolSize <= 0) {
-//            logger.error("parameter bufferPoolSize is a wrong number");
-//            return false;
-//        }
-//        logger.info("get bufferPoolSize " + bufferPoolSize);
-//        dynamicParams.put(BUFFER_POOL_SIZE, bufferPoolSize);
-
-        int dataPoolSize = conf.getInt(DATA_POOL_SIZE, 1000);
-        if (dataPoolSize <= 0) {
-            logger.error("parameter dataPoolSize is a wrong number");
+        String mqnameserver = conf.getString(MQ_NAME_SERVER, "");
+        if (mqnameserver.isEmpty()) {
+            logger.error("parameter mqnameserver does not exist or is not defined");
             return false;
         }
-        logger.info("get dataPoolSize " + dataPoolSize);
-        dynamicParams.put(DATA_POOL_SIZE, dataPoolSize);
-
-        int sendPoolSize = conf.getInt(SEND_POOL_SIZE, 5000);
-        if (sendPoolSize <= 0) {
-            logger.error("parameter sendPoolSize is a wrong number");
-            return false;
-        }
-        logger.info("get sendPoolSize " + sendPoolSize);
-        dynamicParams.put(SEND_POOL_SIZE, sendPoolSize);
-
-//        int writeToFileThread = conf.getInt(WRITE_TO_FILE_THREAD, 5);
-//        if (writeToFileThread <= 0) {
-//            logger.error("parameter writeToFileThread is a wrong number");
-//            return false;
-//        }
-//        logger.info("get writeToFileThread " + writeToFileThread);
-//        dynamicParams.put(WRITE_TO_FILE_THREAD, writeToFileThread);
+        logger.info("get mqnameserver " + mqnameserver);
+        dynamicParams.put(MQ_NAME_SERVER, mqnameserver);
 
         int transmitThread = conf.getInt(TRANSMIT_THREAD, 5);
         if (transmitThread <= 0) {
@@ -135,13 +115,13 @@ public class RuntimeEnv {
         logger.info("get sendThreadPoolSize " + sendThreadPoolSize);
         dynamicParams.put(SEND_THREAD_POOL_SIZE, sendThreadPoolSize);
 
-//        int activeThreadCount = conf.getInt(ACTIVE_THREAD_COUNT, 0);
-//        if (activeThreadCount < 0) {
-//            logger.error("parameter activeThreadCount is a wrong number");
-//            return false;
-//        }
-//        logger.info("get activeThreadCount " + activeThreadCount);
-//        dynamicParams.put(ACTIVE_THREAD_COUNT, activeThreadCount);
+        int activeThreadCount = conf.getInt(ACTIVE_THREAD_COUNT, 0);
+        if (activeThreadCount < 0) {
+            logger.error("parameter activeThreadCount is a wrong number");
+            return false;
+        }
+        logger.info("get activeThreadCount " + activeThreadCount);
+        dynamicParams.put(ACTIVE_THREAD_COUNT, activeThreadCount);
 
         String metaStoreClient = conf.getString(METASTORE_CLIENT, "");
         if (metaStoreClient.isEmpty()) {
@@ -190,7 +170,7 @@ public class RuntimeEnv {
         }
         logger.info("get group " + group);
         dynamicParams.put(GROUP, group);
-        
+
         int sendtimeout = conf.getInt(SEND_TIMEOUT, 60);
         if (sendtimeout <= 0) {
             logger.error("parameter sendtimeout is a wrong number");
@@ -206,7 +186,7 @@ public class RuntimeEnv {
         }
         logger.info("get timefilter " + timefilter);
         dynamicParams.put(TIME_FILTER, timefilter);
-        
+
         int packagetimelimit = conf.getInt(PACKAGE_TIMELIMIT, 5);
         if (packagetimelimit <= 0) {
             logger.error("parameter packagetimelimit is a wrong number");
@@ -214,7 +194,7 @@ public class RuntimeEnv {
         }
         logger.info("get packagetimelimit " + packagetimelimit);
         dynamicParams.put(PACKAGE_TIMELIMIT, packagetimelimit);
-        
+
         int timefilterfile = conf.getInt(TIME_FILTER_FILE, 0);
         if (timefilterfile < 0) {
             logger.error("parameter timefilterfile is a wrong number");
@@ -222,6 +202,62 @@ public class RuntimeEnv {
         }
         logger.info("get timefilterfile " + timefilterfile);
         dynamicParams.put(TIME_FILTER_FILE, timefilterfile);
+
+        int filterfile = conf.getInt(FILTER_FILE, 0);
+        if (filterfile < 0) {
+            logger.error("parameter filterfile is a wrong number");
+            return false;
+        }
+        logger.info("get filterfile " + filterfile);
+        dynamicParams.put(FILTER_FILE, filterfile);
+
+        int handlertype = conf.getInt(HDNDLER_TYPE, 0);
+        if (handlertype < 0) {
+            logger.error("parameter handlertype is a wrong number");
+            return false;
+        }
+        logger.info("get handlertype " + handlertype);
+        dynamicParams.put(HDNDLER_TYPE, handlertype);
+
+        int datapoolcount = conf.getInt(DATA_POOL_COUNT, 5);
+        if (datapoolcount < 0) {
+            logger.error("parameter datapoolcount is a wrong number");
+            return false;
+        }
+        logger.info("get datapoolcount " + datapoolcount);
+        dynamicParams.put(DATA_POOL_COUNT, datapoolcount);
+
+        int mqfetchrunnersize = conf.getInt(MQ_FETCH_RUNNER_SIZE, 12);
+        if (mqfetchrunnersize < 0) {
+            logger.error("parameter mqfetchrunnersize is a wrong number");
+            return false;
+        }
+        logger.info("get mqfetchrunnersize " + mqfetchrunnersize);
+        dynamicParams.put(MQ_FETCH_RUNNER_SIZE, mqfetchrunnersize);
+
+        String nodename = conf.getString(NODENAME, "");
+        if (nodename.isEmpty()) {
+            logger.error("parameter nodename does not exist or is not defined");
+            return false;
+        }
+        logger.info("get nodename " + nodename);
+        dynamicParams.put(NODENAME, nodename);
+
+        String rmqgroup = conf.getString(RMQGROUP, "");
+        if (rmqgroup.isEmpty()) {
+            logger.error("parameter rmqgroup does not exist or is not defined");
+            return false;
+        }
+        logger.info("get rmqgroup " + rmqgroup);
+        dynamicParams.put(RMQGROUP, rmqgroup);
+
+        int blankand0 = conf.getInt(BLANKAND0, 0);
+        if (timefilterfile < 0) {
+            logger.error("parameter blankand0 is a wrong number");
+            return false;
+        }
+        logger.info("get blankand0 " + blankand0);
+        dynamicParams.put(BLANKAND0, blankand0);
         
         return true;
     }

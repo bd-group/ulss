@@ -8,7 +8,6 @@ import cn.ac.iie.ulss.dataredistribution.commons.GlobalVariables;
 import cn.ac.iie.ulss.dataredistribution.commons.RuntimeEnv;
 import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -31,7 +30,7 @@ public class StoreUselessDataThread implements Runnable {
 
     static {
         PropertyConfigurator.configure("log4j.properties");
-        logger = org.apache.log4j.Logger.getLogger(StoreStrandedDataThread.class.getName());
+        logger = org.apache.log4j.Logger.getLogger(StoreUselessDataThread.class.getName());
     }
 
     public StoreUselessDataThread(ConcurrentLinkedQueue sdQueue, String topic) {
@@ -61,13 +60,14 @@ public class StoreUselessDataThread implements Runnable {
                 FileOutputStream fos = null;
                 try {
                     fos = new FileOutputStream(f, true);
-                } catch (FileNotFoundException ex) {
+                } catch (Exception ex) {
                     logger.error(ex, ex);
+                    f.delete();
                     continue;
                 }
                 BufferedOutputStream bos = new BufferedOutputStream(fos);
 
-                while (count < 1000) {
+                while (count < 100000) {
                     count++;
                     if (!sdQueue.isEmpty()) {
                         byte[] b = (byte[]) sdQueue.poll();
@@ -78,9 +78,9 @@ public class StoreUselessDataThread implements Runnable {
                         try {
                             bos.write(b);
                             bos.write('\n');
-                            logger.info("write useless data to the file" + f.getName());
-                        } catch (IOException ex) {
-                            logger.info("write useless data to the file" + f.getName() + " error");
+                            logger.info("write useless data for " + topic + " to the file " + f.getName());
+                        } catch (Exception ex) {
+                            logger.info("write useless data for " + topic + " to the file " + f.getName() + " error");
                             logger.error(b.toString() + ex, ex);
                             continue;
                         }
@@ -102,7 +102,7 @@ public class StoreUselessDataThread implements Runnable {
                 try {
                     bos.flush();
                     bos.close();
-                } catch (IOException ex) {
+                } catch (Exception ex) {
                     logger.error(ex, ex);
                 }
 
@@ -122,7 +122,7 @@ public class StoreUselessDataThread implements Runnable {
                 }
                 try {
                     Thread.sleep(2000);
-                } catch (InterruptedException ex) {
+                } catch (Exception ex) {
                     logger.error(ex, ex);
                 }
             }

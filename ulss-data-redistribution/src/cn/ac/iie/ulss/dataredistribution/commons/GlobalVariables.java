@@ -5,19 +5,20 @@ package cn.ac.iie.ulss.dataredistribution.commons;
  * and open the template in the editor.
  */
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
+import cn.ac.iie.ulss.dataredistribution.handler.DataAccepter;
+import cn.ac.iie.ulss.dataredistribution.handler.GetErrorFile;
 import cn.ac.iie.ulss.dataredistribution.handler.HandlerDetectNodeThread;
-import cn.ac.iie.ulss.dataredistribution.handler.SendStrandedDataThread;
 import cn.ac.iie.ulss.dataredistribution.handler.TransmitStrandedDataThread;
+import cn.ac.iie.ulss.dataredistribution.tools.DataProducer;
 import cn.ac.iie.ulss.dataredistribution.tools.MetaStoreClientPool;
 import cn.ac.iie.ulss.dataredistribution.tools.Rule;
-import com.taobao.metamorphosis.client.consumer.MessageConsumer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
-import org.apache.http.client.HttpClient;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
@@ -28,7 +29,6 @@ import org.apache.log4j.PropertyConfigurator;
 public class GlobalVariables {
 
     public static final String SYN_VALUE_TO_FILE = "synValueToFile";
-    public static final String SYN_MESSAGETRANSFERSTATION = "synMessageTransferStation";
     public static final String SYN_STORE_STRANDEDDATA = "synStoreStrandedData";
     public static final String SYN_STORE_USELESSDATA = "synStoreUselessData";
     public static final String SYN_STORE_UNVALIDDATA = "synStoreUnvalidData";
@@ -44,11 +44,9 @@ public class GlobalVariables {
     public static final String DETECT_NODELIST = "detectNodeList";
     public static final String DETECT_NODE = "detectNode";
     public static final String STRANDED_DATA_TRANSMIT = "strandedDataTransmit";
-    public static final String STRANDED_DATA_SEND = "strandedDataSend";
     public static final String STRANDED_DATA_STORE = "strandedDataStore";
     public static final String USELESS_DATA_STORE = "uselessDataStore";
     public static final String UNVALID_DATA_STORE = "unvalidDataStore";
-    public static final String TOPIC_TO_SEND_THREADPOOL = "topicToSendThreadPool";
     public static final String TOPIC_TO_SCHEMACONTENT = "topicToSchemaContent";
     public static final String TOPIC_TO_SCHEMANAME = "topicToSchemaName";
     public static final String DOCS_SCHEMA_CONTENT = "docsSchemaContent";
@@ -63,10 +61,14 @@ public class GlobalVariables {
     public static final String TOPIC_TO_SYN_COUNT = "TopicToSynCount";
     public static final String TOPIC_TO_HTTPCLIENT = "TopicToHttpclient";
     public static final String TOPIC_TO_NODES = "topicToNodes";
-    public static final String TOPIC_TO_CONSUMER = "topicToConsumer";
     public static final String TOPIC_TO_PACKAGE = "topicToPackage";
     public static final String TOPIC_TO_DATAPOOL = "topicToDataPool";
     public static final String RULE_TO_THREADPOOLSIZE = "ruleToThreadPoolSize";
+    public static final String TOPIC_TO_ACCEPTPOOLSIZE = "topicToAcceptPoolSize";
+    public static final String RULE_TO_SENDPOOLSIZE = "ruleToSendPoolSize";
+    public static final String PRODUCER = "producer";
+    public static final String CONSUMER = "consumer";
+    public static final String ERRORFILECONSUMER = "errorfileconsumer";
     static Logger logger = null;
 
     static {
@@ -82,9 +84,6 @@ public class GlobalVariables {
 
         byte[] synValueToFile = new byte[0];
         RuntimeEnv.addParam(SYN_VALUE_TO_FILE, synValueToFile);
-
-        byte[] synMessageTransferStation = new byte[0];
-        RuntimeEnv.addParam(SYN_MESSAGETRANSFERSTATION, synMessageTransferStation);
 
         byte[] synStoreStrandedData = new byte[0];
         RuntimeEnv.addParam(SYN_STORE_STRANDEDDATA, synStoreStrandedData);
@@ -104,9 +103,17 @@ public class GlobalVariables {
         byte[] synDetectNode = new byte[0];
         RuntimeEnv.addParam(SYN_DETECT_NODE, synDetectNode);
 
-        logger.info("setting the topicToSendThreadPool to the Global Variables");
-        Map<String, ThreadGroup> topicToSendThreadPool = new HashMap<String, ThreadGroup>();
-        RuntimeEnv.addParam(TOPIC_TO_SEND_THREADPOOL, topicToSendThreadPool);
+        logger.info("setting the producer to the Global Variables");
+        DataProducer producer = new DataProducer();
+        RuntimeEnv.addParam(PRODUCER, producer);
+
+        logger.info("setting the producer to the Global Variables");
+        DataAccepter accepter = new DataAccepter();
+        RuntimeEnv.addParam(CONSUMER, accepter);
+
+        logger.info("setting the errorfileconsumer to the Global Variables");
+        GetErrorFile errorfileconsumer = new GetErrorFile();
+        RuntimeEnv.addParam(ERRORFILECONSUMER, errorfileconsumer);
 
         logger.info("setting the topicToAcceptCount to the Global Variables");
         ConcurrentHashMap<String, AtomicLong[]> topicToAcceptCount = new ConcurrentHashMap<String, AtomicLong[]>();
@@ -173,28 +180,32 @@ public class GlobalVariables {
         RuntimeEnv.addParam(TOPIC_TO_SYN_COUNT, TopicToSynCount);
 
         logger.info("setting the TopicToHttpclient to the Global Variables");
-        Map<String, HttpClient> TopicToHttpclient = new HashMap<String, HttpClient>();
+        Map<String, CloseableHttpClient> TopicToHttpclient = new HashMap<String, CloseableHttpClient>();
         RuntimeEnv.addParam(TOPIC_TO_HTTPCLIENT, TopicToHttpclient);
 
         logger.info("setting the topicToNodes to the Global Variables");
         Map<String, ArrayList<RNode>> topicToNodes = new HashMap<String, ArrayList<RNode>>();
         RuntimeEnv.addParam(TOPIC_TO_NODES, topicToNodes);
 
-        logger.info("setting the topicToConsumer to the Global Variables");
-        Map<String, MessageConsumer> topicToConsumer = new HashMap<String, MessageConsumer>();
-        RuntimeEnv.addParam(TOPIC_TO_CONSUMER, topicToConsumer);
-
         logger.info("setting the topicToPackage to the Global Variables");
         Map<String, AtomicLong> topicToPackage = new HashMap<String, AtomicLong>();
         RuntimeEnv.addParam(TOPIC_TO_PACKAGE, topicToPackage);
 
         logger.info("setting the topicToDataPool to the Global Variables");
-        Map<String, ConcurrentLinkedQueue> topicToDataPool = new HashMap<String, ConcurrentLinkedQueue>();
+        Map<String, ConcurrentLinkedQueue[]> topicToDataPool = new HashMap<String, ConcurrentLinkedQueue[]>();
         RuntimeEnv.addParam(TOPIC_TO_DATAPOOL, topicToDataPool);
 
         logger.info("setting the ruleToThreadPoolSize to the Global Variables");
         Map<String, Map<String, AtomicLong>> ruleToThreadPoolSize = new HashMap<String, Map<String, AtomicLong>>();
         RuntimeEnv.addParam(RULE_TO_THREADPOOLSIZE, ruleToThreadPoolSize);
+
+        logger.info("setting the topicToAcceptPoolSize to the Global Variables");
+        Map<String, Integer> topicToAcceptPoolSize = new HashMap<String, Integer>();
+        RuntimeEnv.addParam(TOPIC_TO_ACCEPTPOOLSIZE, topicToAcceptPoolSize);
+
+        logger.info("setting the ruleToSendPoolSize to the Global Variables");
+        Map<String, Integer> ruleToSendPoolSize = new HashMap<String, Integer>();
+        RuntimeEnv.addParam(RULE_TO_SENDPOOLSIZE, ruleToSendPoolSize);
 
         logger.info("setting the detectNodeList and detectNode to the Global Variables");
         ConcurrentLinkedQueue<Object[]> detectNodeList = new ConcurrentLinkedQueue<Object[]>();
@@ -213,13 +224,5 @@ public class GlobalVariables {
         Thread ttsdt = new Thread(tsdt);
         ttsdt.setName("TransmitStrandedDataThread");
         ttsdt.start();
-
-        logger.info("setting the strandedDataSend for send to the Global Variables");
-        ConcurrentLinkedQueue<Object[]> strandedDataSend = new ConcurrentLinkedQueue<Object[]>();
-        RuntimeEnv.addParam(STRANDED_DATA_SEND, strandedDataSend);
-        SendStrandedDataThread ss = new SendStrandedDataThread(strandedDataSend);
-        Thread tss = new Thread(ss);
-        tss.setName("SendStrandedDataThread");
-        tss.start();
     }
 }

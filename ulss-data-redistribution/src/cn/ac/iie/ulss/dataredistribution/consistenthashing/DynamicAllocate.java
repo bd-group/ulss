@@ -6,6 +6,7 @@ import java.util.List;
 /**
  *
  * @author evan yang
+ * date
  */
 public class DynamicAllocate {
 

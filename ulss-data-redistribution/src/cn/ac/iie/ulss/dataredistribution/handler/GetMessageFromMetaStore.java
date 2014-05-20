@@ -7,8 +7,8 @@ package cn.ac.iie.ulss.dataredistribution.handler;
 import cn.ac.iie.ulss.dataredistribution.commons.GlobalVariables;
 import cn.ac.iie.ulss.dataredistribution.commons.RuntimeEnv;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
-import cn.ac.iie.ulss.dataredistribution.consistenthashing.MD5NodeLocator;
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.DynamicAllocate;
+import cn.ac.iie.ulss.dataredistribution.consistenthashing.HashCodeNodeLocator;
 import cn.ac.iie.ulss.dataredistribution.tools.MessageTransferStation;
 import cn.ac.iie.ulss.dataredistribution.tools.MetaStoreClientPool;
 import cn.ac.iie.ulss.dataredistribution.tools.MetaStoreClientPool.MetaStoreClient;
@@ -149,7 +149,7 @@ public class GetMessageFromMetaStore implements Runnable {
                                                 }
                                                 DynamicAllocate dynamicallocate = new DynamicAllocate();
                                                 dynamicallocate.setNodes(nurl);
-                                                MD5NodeLocator nodelocator = dynamicallocate.getMD5NodeLocator();
+                                                HashCodeNodeLocator nodelocator = dynamicallocate.getHashCodeNodeLocator();
 
                                                 r.changerule(nurl, nodelocator, keywords, partType);
                                                 logger.info("change the partitioninfo for " + r.getTopic() + " " + r.getServiceName() + " to " + partType + " " + keywords + " " + hashNum + " successfully!");

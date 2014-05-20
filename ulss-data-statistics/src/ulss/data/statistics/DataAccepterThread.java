@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
 import org.apache.log4j.Logger;
 
 /**
@@ -31,11 +30,24 @@ public class DataAccepterThread implements Runnable {
     String MQ = null;
     String time = null;
     HashMap<String, AtomicLong[]> timeToCount = null;
+    static MessageSessionFactory sessionFactory;
     static Logger logger = null;
 
     static {
         PropertyConfigurator.configure("log4j.properties");
         logger = org.apache.log4j.Logger.getLogger(DataAccepterThread.class.getName());
+
+        System.setProperty("notify.remoting.max_read_buffer_size", "10485760");
+        MetaClientConfig metaClientConfig = new MetaClientConfig();
+        ZkUtils.ZKConfig zkConfig = new ZkUtils.ZKConfig();
+        zkConfig.zkConnect = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
+        metaClientConfig.setZkConfig(zkConfig);
+        
+        try {
+            sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
+        } catch (MetaClientException ex) {
+            logger.error(ex,ex);
+        }
     }
 
     public DataAccepterThread(String zkUrl, String MQ, String time , HashMap<String, AtomicLong[]> timeToCount) {
@@ -57,14 +69,14 @@ public class DataAccepterThread implements Runnable {
     public void pullDataFromQ() {
         Map<String, MessageConsumer> MQToConsumer = (Map<String, MessageConsumer>) RuntimeEnv.getParam(GlobalVariables.MQ_TO_CONSUMER);
         
-        System.setProperty("notify.remoting.max_read_buffer_size", "10485760");
-        MetaClientConfig metaClientConfig = new MetaClientConfig();
-        final ZkUtils.ZKConfig zkConfig = new ZkUtils.ZKConfig();
-        zkConfig.zkConnect = this.zkUrl;
-        metaClientConfig.setZkConfig(zkConfig);
-        final MessageSessionFactory sessionFactory;
+//        System.setProperty("notify.remoting.max_read_buffer_size", "10485760");
+//        MetaClientConfig metaClientConfig = new MetaClientConfig();
+//        final ZkUtils.ZKConfig zkConfig = new ZkUtils.ZKConfig();
+//        zkConfig.zkConnect = this.zkUrl;
+//        metaClientConfig.setZkConfig(zkConfig);
+//        final MessageSessionFactory sessionFactory;
         try {
-            sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
+//            sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
 
             ConsumerConfig cc = new ConsumerConfig("sta_" + MQ + "_consumer");
             cc.setFetchRunnerCount(1);

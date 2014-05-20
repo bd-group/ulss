@@ -11,14 +11,13 @@ import cn.ac.iie.ulss.dataredistribution.consistenthashing.NodeLocator;
 import cn.ac.iie.ulss.dataredistribution.tools.MessageTransferStation;
 import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.avro.Protocol;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
@@ -39,6 +38,9 @@ public class TransmitStrandedDataThread implements Runnable {
     ConcurrentLinkedQueue<Object[]> strandedDataTransmit = null;
     public final String allChar = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     Map<RNode, Object> sendRows = null;
+    ConcurrentHashMap<String, AtomicLong> ruleToFilterCount = null;
+    int filterfile = (Integer) RuntimeEnv.getParam(RuntimeEnv.FILTER_FILE);
+    int blankand0 = 0;
     static org.apache.log4j.Logger logger = null;
 
     static {
@@ -52,6 +54,8 @@ public class TransmitStrandedDataThread implements Runnable {
 
     @Override
     public void run() {
+        ruleToFilterCount = (ConcurrentHashMap<String, AtomicLong>) RuntimeEnv.getParam(GlobalVariables.RULE_TO_FILTERCOUNT);
+        blankand0 = (Integer) RuntimeEnv.getParam(RuntimeEnv.BLANKAND0);
         while (true) {
             Object[] o = strandedDataTransmit.poll();
             if (o == null) {
@@ -63,12 +67,7 @@ public class TransmitStrandedDataThread implements Runnable {
             } else {
                 Rule r = (Rule) o[0];
                 byte[] sendData = (byte[]) o[1];
-                try {
-                    dataSplitAndSent(r, sendData);
-                } catch (Exception ex) {
-                    logger.error(ex, ex);
-                    return;
-                }
+                dataSplitAndSent(r, sendData);
             }
         }
     }
@@ -77,7 +76,7 @@ public class TransmitStrandedDataThread implements Runnable {
      *
      * dataSplit and send the stranded message to the transfer station
      */
-    private void dataSplitAndSent(Rule rule, byte[] sendData) throws InterruptedException {
+    private void dataSplitAndSent(Rule rule, byte[] sendData) {
         //logger.info("begining the dataSplit and send the stranded message from " + r.getTopic() + " to the transfer station ");
         String msgSchemaContent = ((Map<String, String>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_SCHEMACONTENT)).get(rule.getTopic());
         String docsSchemaContent = (String) RuntimeEnv.getParam(GlobalVariables.DOCS_SCHEMA_CONTENT);
@@ -87,12 +86,11 @@ public class TransmitStrandedDataThread implements Runnable {
         DatumReader<GenericRecord> docsreader = new GenericDatumReader<GenericRecord>(docsSchema);
         ByteArrayInputStream docsin = new ByteArrayInputStream(sendData);
         BinaryDecoder docsdecoder = DecoderFactory.get().binaryDecoder(docsin, null);
-
         GenericRecord docsGr = null;
 
         try {
             docsGr = docsreader.read(null, docsdecoder);
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             logger.info("split the data package from the topic " + rule.getTopic() + " in the dataPool wrong " + ex, ex);
             storeUselessData(rule.getTopic(), sendData);
             return;
@@ -112,8 +110,8 @@ public class TransmitStrandedDataThread implements Runnable {
 
             try {
                 msgRecord = msgreader.read(null, msgbd);
-            } catch (IOException ex) {
-                logger.info((new Date()) + " split the one data from the topic " + rule.getTopic() + " in the dataPool wrong " + ex, ex);
+            } catch (Exception ex) {
+//                logger.info((new Date()) + " split the one data from the topic " + rule.getTopic() + " in the dataPool wrong " + ex, ex);
                 storeUselessData(rule.getTopic(), onedata);
                 continue;
             }
@@ -149,7 +147,7 @@ public class TransmitStrandedDataThread implements Runnable {
                 logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
                 try {
                     Thread.sleep(2000);
-                } catch (InterruptedException ex) {
+                } catch (Exception ex) {
                     //do nothing
                 }
             }
@@ -172,9 +170,19 @@ public class TransmitStrandedDataThread implements Runnable {
         }
 
         while (true) {
-            NodeLocator n = rule.getNodelocator();
-            if (n.getNodesNum() > 0) {
-                RNode node = n.getPrimary(sb.toString());
+            NodeLocator n1 = rule.getNodelocator();
+            if (n1.getNodesNum() > 0) {
+                RNode node = null;
+                if (blankand0 == 1) {
+                    if (sb.toString() == null || sb.toString().equals("") || sb.toString().equals("0")) {
+                        String randomstring = generateString(10);
+                        node = n1.getPrimary(randomstring);
+                    } else {
+                        node = n1.getPrimary(sb.toString());
+                    }
+                } else {
+                    node = n1.getPrimary(sb.toString());
+                }
                 ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
                 clq.offer(data);
                 break;
@@ -183,7 +191,7 @@ public class TransmitStrandedDataThread implements Runnable {
                 logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
                 try {
                     Thread.sleep(2000);
-                } catch (InterruptedException ex) {
+                } catch (Exception ex) {
                     //do nothing
                 }
             }
@@ -211,11 +219,17 @@ public class TransmitStrandedDataThread implements Runnable {
                     logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
                     try {
                         Thread.sleep(2000);
-                    } catch (InterruptedException ex) {
+                    } catch (Exception ex) {
                         //do nothing
                     }
                 }
             }
+        } else {
+            if (filterfile == 1) {
+                storeUnvalidData(rule, data);
+            }
+            AtomicLong al = ruleToFilterCount.get(rule.getTopic() + rule.getServiceName() + rule.getFilters());
+            al.incrementAndGet();
         }
     }
 
@@ -238,7 +252,17 @@ public class TransmitStrandedDataThread implements Runnable {
                             sb.append((record.get(ss.toLowerCase())).toString());
                         }
                     }
-                    RNode node = n3.getPrimary(sb.toString());
+                    RNode node = null;
+                    if (blankand0 == 1) {
+                        if (sb.toString() == null || sb.toString().equals("") || sb.toString().equals("0")) {
+                            String randomstring = generateString(10);
+                            node = n3.getPrimary(randomstring);
+                        } else {
+                            node = n3.getPrimary(sb.toString());
+                        }
+                    } else {
+                        node = n3.getPrimary(sb.toString());
+                    }
                     ConcurrentLinkedQueue clq = (ConcurrentLinkedQueue) sendRows.get(node);
                     clq.offer(data);
                     break;
@@ -247,11 +271,17 @@ public class TransmitStrandedDataThread implements Runnable {
                     logger.error("There is no node for the " + rule.getTopic() + " " + rule.getServiceName());
                     try {
                         Thread.sleep(2000);
-                    } catch (InterruptedException ex) {
+                    } catch (Exception ex) {
                         //do nothing
                     }
                 }
             }
+        } else {
+            if (filterfile == 1) {
+                storeUnvalidData(rule, data);
+            }
+            AtomicLong al = ruleToFilterCount.get(rule.getTopic() + rule.getServiceName() + rule.getFilters());
+            al.incrementAndGet();
         }
     }
 
@@ -352,7 +382,6 @@ public class TransmitStrandedDataThread implements Runnable {
 //            }
 //        }
 //    }
-
     /**
      *
      * place the useless data to the uselessDataStore
@@ -371,6 +400,29 @@ public class TransmitStrandedDataThread implements Runnable {
                 Thread tsudt = new Thread(sudt);
                 tsudt.start();
                 logger.info("start a StoreUselessDataThread for " + topic);
+            }
+        }
+    }
+
+    /**
+     *
+     * place the unvalid data to the unvalidDataStore
+     */
+    private void storeUnvalidData(Rule rule, byte[] data) {
+        ConcurrentHashMap<Rule, ConcurrentLinkedQueue> UnvalidDataStore = (ConcurrentHashMap<Rule, ConcurrentLinkedQueue>) RuntimeEnv.getParam(GlobalVariables.UNVALID_DATA_STORE);
+        synchronized (RuntimeEnv.getParam(GlobalVariables.SYN_STORE_UNVALIDDATA)) {
+            if (UnvalidDataStore.containsKey(rule)) {
+                ConcurrentLinkedQueue clq = UnvalidDataStore.get(rule);
+                clq.offer(data);
+            } else {
+                ConcurrentLinkedQueue sdQueue = new ConcurrentLinkedQueue();
+                sdQueue.offer(data);
+                UnvalidDataStore.put(rule, sdQueue);
+                StoreUnvalidDataThread sudt = new StoreUnvalidDataThread(sdQueue, rule);
+                Thread tsudt = new Thread(sudt);
+                tsudt.setName("StoreUnvalidDataThread-" + rule.getTopic() + "-" + rule.getServiceName());
+                tsudt.start();
+                logger.info("start a StoreUnvalidDataStoreDataThread for " + rule.getTopic());
             }
         }
     }

@@ -6,8 +6,6 @@ import cn.ac.iie.ulss.dataredistribution.tools.Rule;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -37,9 +35,12 @@ import org.apache.log4j.PropertyConfigurator;
  */
 public class TopicThread implements Runnable {
 
+    int handlertype = 0;
+    int filecount = 0;
+    int transmitthreadsize = 0 ;
     String topic = null;
     ArrayList<Rule> ruleSet = null;
-    ConcurrentLinkedQueue dataPool = null;
+    ConcurrentLinkedQueue[] dataPool = null;
     Protocol protocol = null;
     Schema docsschema = null;
     DatumReader<GenericRecord> docsreader = null;
@@ -53,16 +54,19 @@ public class TopicThread implements Runnable {
     String fileName = null;
     File fsmit = null;
     String dataDir = (String) RuntimeEnv.getParam(RuntimeEnv.DATA_DIR);
-    Map<String, ConcurrentLinkedQueue> topicToDataPool = (Map<String, ConcurrentLinkedQueue>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_DATAPOOL);
-    static Logger logger = null;
+    Map<String, ConcurrentLinkedQueue[]> topicToDataPool = (Map<String, ConcurrentLinkedQueue[]>) RuntimeEnv.getParam(GlobalVariables.TOPIC_TO_DATAPOOL);
+    Logger logger = null;
 
-    static {
+    {
         PropertyConfigurator.configure("log4j.properties");
         logger = Logger.getLogger(TopicThread.class.getName());
     }
 
     public TopicThread(String topic) {
         this.topic = topic;
+        handlertype = (Integer) RuntimeEnv.getParam(RuntimeEnv.HDNDLER_TYPE);
+        filecount = (Integer) RuntimeEnv.getParam(RuntimeEnv.DATA_POOL_COUNT);
+        transmitthreadsize = ((Integer) RuntimeEnv.getParam(RuntimeEnv.TRANSMIT_THREAD));
     }
 
     @Override
@@ -75,24 +79,27 @@ public class TopicThread implements Runnable {
             logger.info("the topic " + topic + "has no services need data");
         } else {
             dataPool = topicToDataPool.get(topic);
-            
-            fileName = dataDir + "backup/" + topic + ".bk";
-            fsmit = new File(fileName);
-            if (fsmit.exists()) {
-                logger.info("handlering the leaving data for the topic " + topic);
-                handlerLeavingData(fsmit);
-                logger.info("handler the leaving data for the topic " + topic + " successfully");
+
+            for (int i = 0; i < filecount; i++) {
+                fileName = dataDir + "backup/" + topic + i + ".bk";
+                fsmit = new File(fileName);
+                if ( handlertype == 1 && fsmit.exists()) {
+                    logger.info("handlering the leaving data for the topic " + topic);
+                    handlerLeavingData(fsmit , i);
+                    logger.info("handler the leaving data for the topic " + topic + " successfully");
+                }
+
+                for (int j = 0; j < transmitthreadsize; j++) {
+                    int number = transmitthreadsize * i + j;
+                    TransmitThread dtm = new TransmitThread(dataPool[i], ruleSet, topic);
+                    Thread tdtm = new Thread(dtm);
+                    tdtm.setName("TransmitThread－" + topic + "-" + number);
+                    tdtm.start();
+                }
             }
 
-            for (int i = 0; i < ((Integer) RuntimeEnv.getParam(RuntimeEnv.TRANSMIT_THREAD)); i++) {
-                TransmitThread dtm = new TransmitThread(dataPool, ruleSet, topic);
-                Thread tdtm = new Thread(dtm);
-                tdtm.setName("TransmitThread－" + topic + "-" + i);
-                tdtm.start();
-            }
-
-            logger.info("begin pull data for the topic " + topic + " from metaq");
-            acceptData();
+//            logger.info("begin pull data for the topic " + topic + " from metaq");
+//            acceptData();
         }
     }
 
@@ -105,23 +112,23 @@ public class TopicThread implements Runnable {
         docsreader = new GenericDatumReader<GenericRecord>(docsschema);
     }
 
-    /**
-     *
-     * accept data from the metaq
-     */
-    private void acceptData() {
-        String zkUrl = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
-        DataAccepterThread dataAccepter = new DataAccepterThread(zkUrl, topic, dataPool);
-        Thread tda = new Thread(dataAccepter);
-        tda.setName("DataAccepterThread-" + topic);
-        tda.start();
-    }
+//    /**
+//     *
+//     * accept data from the metaq
+//     */
+//    private void acceptData() {
+//        String zkUrl = (String) RuntimeEnv.getParam(RuntimeEnv.ZK_CLUSTER);
+//        DataAccepterThread dataAccepter = new DataAccepterThread(zkUrl, topic, dataPool);
+//        Thread tda = new Thread(dataAccepter);
+//        tda.setName("DataAccepterThread-" + topic);
+//        tda.start();
+//    }
 
     /**
      *
      * handler the leaving data in the file
      */
-    private void handlerLeavingData(File f) {
+    private void handlerLeavingData(File f , int num) {
         try {
             DataFileReader<GenericRecord> dataFileReader = new DataFileReader<GenericRecord>(f, docsreader);
             DatumWriter<GenericRecord> write = new GenericDatumWriter<GenericRecord>(docsschema);
@@ -135,19 +142,17 @@ public class TopicThread implements Runnable {
                 docsdecoder = DecoderFactory.get().binaryDecoder(docsin, null);
                 try {
                     docsGr = docsreader.read(null, docsdecoder);
-                } catch (IOException ex) {
+                } catch (Exception ex) {
                     logger.info("split the data package from the topic " + topic + " from the file wrong " + ex, ex);
                 }
                 msgSet = (GenericData.Array<GenericRecord>) docsGr.get(GlobalVariables.DOC_SET);
                 msgitor = msgSet.iterator();
                 while (msgitor.hasNext()) {
                     byte[] onedata = ((ByteBuffer) msgitor.next()).array();
-                    dataPool.offer(onedata);
+                    dataPool[num].offer(onedata);
                 }
             }
-        } catch (FileNotFoundException ex) {
-            logger.error(ex, ex);
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             logger.error(ex, ex);
         }
     }

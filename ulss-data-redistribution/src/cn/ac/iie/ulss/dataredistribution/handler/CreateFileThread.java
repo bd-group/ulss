@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package cn.ac.iie.ulss.dataredistribution.handler;
 
 import cn.ac.iie.ulss.dataredistribution.consistenthashing.RNode;
@@ -20,9 +16,9 @@ public class CreateFileThread implements Runnable {
 
     Rule rule = null;
     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss");
-    static org.apache.log4j.Logger logger = null;
+    org.apache.log4j.Logger logger = null;
 
-    static {
+    {
         PropertyConfigurator.configure("log4j.properties");
         logger = org.apache.log4j.Logger.getLogger(CreateFileThread.class.getName());
     }
@@ -53,6 +49,10 @@ public class CreateFileThread implements Runnable {
         long next = 1;
         String nextKeyinterval = getNextKeyInterval(nowtime, unit, interval, next);
         long sleeptime = getSleeptime(unit, interval);
+        try {
+            Thread.sleep(sleeptime);
+        } catch (InterruptedException ex) {
+        }
         while (true) {
             nowtime = System.currentTimeMillis() / 1000;
             if (!getKeyInterval(nowtime, unit, interval).endsWith(nextKeyinterval)) {
@@ -62,7 +62,7 @@ public class CreateFileThread implements Runnable {
                 }
                 continue;
             }
-            
+
             logger.info("start createfilethread server");
             unit = (rule.getPartType().split("\\|"))[3];
             interval = (rule.getPartType().split("\\|"))[4];
